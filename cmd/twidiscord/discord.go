@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"runtime"
@@ -46,7 +45,6 @@ type handler struct {
 }
 
 func bindHandler(twipisrv *twipi.ConfiguredServer, cfg *config, store storer) (*handler, error) {
-
 	h := &handler{
 		twipi:    twipisrv,
 		accounts: make([]*accountHandler, 0, len(cfg.Discord.Accounts)),
@@ -63,20 +61,20 @@ func bindHandler(twipisrv *twipi.ConfiguredServer, cfg *config, store storer) (*
 
 // Connect connects all the accounts.
 func (h *handler) Connect(ctx context.Context) error {
-	ctx = logger.WithLogPrefix(ctx, "twidiscord: ")
+	ctx = logger.WithLogPrefix(ctx, "twidiscord:")
 
 	var errg errgroup.Group
 
-	for i, account := range h.accounts {
-		i := i
+	for _, account := range h.accounts {
 		account := account
-
 		errg.Go(func() error {
 			account.ctx = ctx
 			account.ctx = logger.WithLogPrefix(account.ctx, string(account.UserNumber.String()))
 			account.discord = account.discord.WithContext(account.ctx)
 
-			log.Printf("connecting to Discord accounts[%d]", i)
+			log := logger.FromContext(account.ctx)
+			log.Println("connecting to Discord account")
+
 			return account.discord.Connect(ctx)
 		})
 	}
@@ -152,6 +150,12 @@ type messageFragment struct {
 func (h *accountHandler) bind() {
 	h.discord.AddHandler(h.onMessageCreate)
 	h.discord.AddHandler(h.onMessageUpdate)
+	h.discord.AddHandler(func(*gateway.ReadyEvent) {
+		me, _ := h.discord.Me()
+
+		log := logger.FromContext(h.ctx)
+		log.Println("connected to Discord account", me.Tag())
+	})
 }
 
 func (h *accountHandler) onMessageCreate(ev *gateway.MessageCreateEvent) {
@@ -200,11 +204,11 @@ func (h *accountHandler) onMessage(msg *discord.Message, edited bool) {
 
 func (h *accountHandler) sendHelp(src twicli.Message) error {
 	return h.twipi.Client.ReplySMS(h.ctx, src.Message, "Usages:\n"+
-		"Discord, message <0> something here...\n"+
+		"Discord, message <0> content\n"+
 		"Discord, message <0> the first part (...)\n"+
 		"Discord, message <0> the final part\n"+
-		"Discord, message alieb something here...\n"+
-		"Discord, help\n",
+		"Discord, message alieb Hello!\n"+
+		"Discord, help",
 	)
 }
 
