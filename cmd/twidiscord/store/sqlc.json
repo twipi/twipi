@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "path": "./sqlite",
+      "name": "sqlite",
+      "engine": "sqlite",
+      "schema": "./sqlite/schema.sql",
+      "queries": "./sqlite/queries.sql"
+    }
+  ]
+}
