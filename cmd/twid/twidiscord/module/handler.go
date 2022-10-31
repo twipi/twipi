@@ -113,6 +113,9 @@ func (h *Handler) AddAccount(account twidiscord.Account) {
 				Body: fmt.Sprintf("Sorry, we couldn't connect to Discord: %v", err),
 			})
 		}
+
+		log := logger.FromContext(ah.ctx)
+		log.Printf("disconnected from Discord for user %s", ah.UserNumber)
 	}()
 }
 

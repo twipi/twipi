@@ -8,8 +8,10 @@ listen_addr = "unix:///run/user/1000/twipi.sock"
 [twipi]
 enable = true
 
-[twipi.webhook.message]
+[twipi.message]
 enable = true
+
+[twipi.message.webhook]
 incoming_endpoint = "/webhooks/messages/incoming"
 delivery_endpoint = "/webhooks/messages/delivery"
 

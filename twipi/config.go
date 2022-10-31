@@ -15,19 +15,14 @@ import (
 // configuration file of choice. The primary supported languages are JSON and
 // TOML.
 type Config struct {
-	// Secrets is the secret section of Config. It contains sensitive
-	// information such as the Twilio account SID and auth token. It is
-	// strongly discouraged to store this information in a regular config
-	// file. Instead, use environment variables or a separate, more
-	// protected file.
 	Accounts []ConfigAccount
-	Webhook  struct {
-		Message struct {
-			Enable           bool   `toml:"enable" json:"enable"`
+	Message  struct {
+		Enable  bool `toml:"enable" json:"enable"`
+		Webhook struct {
 			IncomingEndpoint string `toml:"incoming_endpoint" json:"incoming_endpoint"`
 			DeliveryEndpoint string `toml:"delivery_endpoint" json:"delivery_endpoint"`
-		} `toml:"message" json:"message"`
-	} `toml:"webhook" json:"webhook"`
+		} `toml:"webhook" json:"webhook"`
+	} `toml:"message" json:"message"`
 }
 
 // ConfigAccount is an account config block.
@@ -60,7 +55,7 @@ type ConfiguredServer struct {
 // NewConfiguredServer creates a new ConfiguredServer from a Config.
 func NewConfiguredServer(c Config) (*ConfiguredServer, error) {
 	if len(c.Accounts) == 0 {
-		return nil, errors.New("no accounts given")
+		return nil, errors.New("no accounts in config")
 	}
 
 	s := ConfiguredServer{
@@ -84,9 +79,9 @@ func NewConfiguredServer(c Config) (*ConfiguredServer, error) {
 		s.Client.AddAccount(account.Value())
 	}
 
-	if c.Webhook.Message.Enable {
-		cfg := c.Webhook.Message
-		s.Message = NewMessageHandler(cfg.IncomingEndpoint, cfg.DeliveryEndpoint)
+	if c.Message.Enable {
+		wcfg := c.Message.Webhook
+		s.Message = NewMessageHandler(wcfg.IncomingEndpoint, wcfg.DeliveryEndpoint)
 		s.RegisterWebhook(s.Message)
 	}
 
@@ -118,15 +113,15 @@ func populateMessageServiceAccount(
 	var incomingURL *string
 	var deliveryURL *string
 
-	if cfg.Webhook.Message.IncomingEndpoint != "" {
+	if cfg.Message.Webhook.IncomingEndpoint != "" {
 		u, _ := url.Parse(cfgAccount.BaseURL.String())
-		u.Path = cfg.Webhook.Message.IncomingEndpoint
+		u.Path = cfg.Message.Webhook.IncomingEndpoint
 		incomingURL = vptr(u.String())
 	}
 
-	if cfg.Webhook.Message.DeliveryEndpoint != "" {
+	if cfg.Message.Webhook.DeliveryEndpoint != "" {
 		u, _ := url.Parse(cfgAccount.BaseURL.String())
-		u.Path = cfg.Webhook.Message.DeliveryEndpoint
+		u.Path = cfg.Message.Webhook.DeliveryEndpoint
 		deliveryURL = vptr(u.String())
 	}
 
@@ -135,19 +130,21 @@ func populateMessageServiceAccount(
 
 	services, errs := client.MessagingV1.StreamService(nil)
 	for service := range services {
-		if nilz(service.InboundRequestUrl) == cfg.Webhook.Message.IncomingEndpoint &&
-			nilz(service.StatusCallback) == cfg.Webhook.Message.DeliveryEndpoint {
+		if nilz(service.FriendlyName) != "twipi" {
+			continue
+		}
+
+		if nilz(service.InboundRequestUrl) == nilz(incomingURL) &&
+			nilz(service.StatusCallback) == nilz(deliveryURL) {
 			// Found.
 			twipiSID = nilz(service.Sid)
 			goto checkNumber
 		}
 
-		if nilz(service.FriendlyName) == "twipi" {
-			// Found a service named twipi, but it's not the
-			// right one. We'll update that one.
-			twipiSID = nilz(service.Sid)
-			goto createService
-		}
+		// Found a service named twipi, but it's not the
+		// right one. We'll update that one.
+		twipiSID = nilz(service.Sid)
+		goto createService
 	}
 
 	if err := <-errs; err != nil {
@@ -192,7 +189,7 @@ checkNumber:
 	for number := range serviceNumbers {
 		if nilz(number.PhoneNumber) == string(client.Account.PhoneNumber) {
 			if createdService {
-				log.Println("successfully set up service")
+				log.Println("successfully set up service (created new service)")
 			}
 			return
 		}
