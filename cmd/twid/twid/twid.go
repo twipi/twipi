@@ -202,7 +202,7 @@ func (l *Loader) LoadConfig(b []byte, configType string) error {
 			}
 
 			if httpHandler, ok := handler.(HTTPCommander); ok {
-				l.mux.Handle(httpHandler.HTTPPrefix(), httpHandler.HTTPHandler())
+				l.mux.Mount(httpHandler.HTTPPrefix(), httpHandler.HTTPHandler())
 			}
 		}
 	}
