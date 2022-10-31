@@ -98,7 +98,7 @@ func (h *Handler) AddAccount(account twidiscord.Account) {
 		defer h.wg.Done()
 
 		ah.ctx = h.ctx
-		ah.ctx = logger.WithLogPrefix(ah.ctx, string(ah.UserNumber))
+		ah.ctx = logger.WithLogPrefix(ah.ctx, "discord: "+string(ah.UserNumber))
 		ah.discord = ah.discord.WithContext(ah.ctx)
 		ah.bind()
 
