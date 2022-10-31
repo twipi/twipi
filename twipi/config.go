@@ -15,9 +15,10 @@ type Config struct {
 		// strongly discouraged to store this information in a regular config
 		// file. Instead, use environment variables or a separate, more
 		// protected file.
-		Secrets struct {
-			AccountSID cfgutil.EnvString `toml:"account_sid" json:"account_sid"`
-			AuthToken  cfgutil.EnvString `toml:"auth_token" json:"auth_token"`
+		Accounts []struct {
+			PhoneNumber cfgutil.Env[PhoneNumber] `toml:"phone_number" json:"phone_number"`
+			AccountSID  cfgutil.EnvString        `toml:"account_sid" json:"account_sid"`
+			AuthToken   cfgutil.EnvString        `toml:"auth_token" json:"auth_token"`
 		}
 		Webhook struct {
 			Message struct {
@@ -39,23 +40,22 @@ type ConfiguredServer struct {
 
 // NewConfiguredServer creates a new ConfiguredServer from a Config.
 func NewConfiguredServer(c Config) (*ConfiguredServer, error) {
-	var (
-		accountSID = c.Twipi.Secrets.AccountSID.Value()
-		authToken  = c.Twipi.Secrets.AuthToken.Value()
-	)
-
-	if accountSID == "" {
-		return nil, errors.New("missing Twilio account SID in secret config")
-	}
-
-	if authToken == "" {
-		return nil, errors.New("missing Twilio auth token in secret config")
+	if len(c.Twipi.Accounts) == 0 {
+		return nil, errors.New("no accounts given")
 	}
 
 	twipic := c.Twipi
 	s := ConfiguredServer{
 		WebhookRouter: NewWebhookRouter(),
-		Client:        NewClient(accountSID, authToken),
+		Client:        NewClient(),
+	}
+
+	for _, account := range twipic.Accounts {
+		s.Client.AddAccount(Account{
+			PhoneNumber: account.PhoneNumber.Value(),
+			AccountSID:  account.AccountSID.String(),
+			AuthToken:   account.AuthToken.String(),
+		})
 	}
 
 	if twipic.Webhook.Message.Enable {
