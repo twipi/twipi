@@ -6,10 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 
+	"github.com/diamondburned/listener"
+	"github.com/diamondburned/twikit/internal/cfgutil"
 	"github.com/diamondburned/twikit/twipi"
 	"github.com/pkg/errors"
 )
@@ -19,6 +22,11 @@ var ErrInvalidUsage = errors.New("invalid usage")
 var (
 	configFile = "twipi.toml"
 )
+
+type Config struct {
+	ListenAddr string `toml:"listen_addr" json:"listen_addr"`
+	twipi.Config
+}
 
 func main() {
 	flag.StringVar(&configFile, "c", configFile, "config file")
@@ -55,10 +63,16 @@ func run(ctx context.Context) error {
 
 	from := twipi.PhoneNumber(flag.Arg(0))
 
-	twipiServer, err := twipi.NewConfiguredServerFromPath(configFile)
+	c, err := cfgutil.ParseFile[Config](configFile)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse config file")
+	}
+
+	twipisrv, err := twipi.NewConfiguredServer(c.Config)
 	if err != nil {
 		return err
 	}
+	defer twipisrv.Close()
 
 	msgCh := make(chan twipi.Message)
 
@@ -74,8 +88,13 @@ func run(ctx context.Context) error {
 		log.Println("message listener exiting")
 	}()
 
-	twipiServer.Message.SubscribeMessages(from, msgCh)
-	defer twipiServer.Message.UnsubscribeMessages(msgCh)
+	twipisrv.Message.SubscribeMessages(from, msgCh)
+	defer twipisrv.Message.UnsubscribeMessages(msgCh)
 
-	return twipiServer.ListenAndServe(ctx)
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: twipisrv,
+	}
+
+	return listener.HTTPListenAndServeCtx(ctx, &server)
 }

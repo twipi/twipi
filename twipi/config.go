@@ -15,12 +15,8 @@ type Config struct {
 		// strongly discouraged to store this information in a regular config
 		// file. Instead, use environment variables or a separate, more
 		// protected file.
-		Accounts []struct {
-			PhoneNumber cfgutil.Env[PhoneNumber] `toml:"phone_number" json:"phone_number"`
-			AccountSID  cfgutil.EnvString        `toml:"account_sid" json:"account_sid"`
-			AuthToken   cfgutil.EnvString        `toml:"auth_token" json:"auth_token"`
-		}
-		Webhook struct {
+		Accounts []ConfigAccount
+		Webhook  struct {
 			Message struct {
 				Enable           bool   `toml:"enable" json:"enable"`
 				IncomingEndpoint string `toml:"incoming_endpoint" json:"incoming_endpoint"`
@@ -28,6 +24,22 @@ type Config struct {
 			} `toml:"message" json:"message"`
 		} `toml:"webhook" json:"webhook"`
 	} `toml:"twipi" json:"twipi"`
+}
+
+// ConfigAccount is an account config block.
+type ConfigAccount struct {
+	PhoneNumber cfgutil.Env[PhoneNumber] `toml:"phone_number" json:"phone_number"`
+	AccountSID  cfgutil.EnvString        `toml:"account_sid" json:"account_sid"`
+	AuthToken   cfgutil.EnvString        `toml:"auth_token" json:"auth_token"`
+}
+
+// Value returns c as the Account type.
+func (c ConfigAccount) Value() Account {
+	return Account{
+		PhoneNumber: c.PhoneNumber.Value(),
+		AccountSID:  c.AccountSID.String(),
+		AuthToken:   c.AuthToken.String(),
+	}
 }
 
 // ConfiguredServer contains servers initialized from a Config. Handlers that
@@ -51,11 +63,7 @@ func NewConfiguredServer(c Config) (*ConfiguredServer, error) {
 	}
 
 	for _, account := range twipic.Accounts {
-		s.Client.AddAccount(Account{
-			PhoneNumber: account.PhoneNumber.Value(),
-			AccountSID:  account.AccountSID.String(),
-			AuthToken:   account.AuthToken.String(),
-		})
+		s.Client.AddAccount(account.Value())
 	}
 
 	if twipic.Webhook.Message.Enable {

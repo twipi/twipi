@@ -10,13 +10,19 @@ import (
 	"os/signal"
 	"strings"
 
+	"github.com/diamondburned/twikit/internal/cfgutil"
 	"github.com/diamondburned/twikit/twipi"
 	"github.com/pkg/errors"
 )
 
 var ErrInvalidUsage = errors.New("invalid usage")
 
+var (
+	configFile = "twipi.toml"
+)
+
 func main() {
+	flag.StringVar(&configFile, "c", configFile, "config file")
 	flag.Usage = func() {
 		printf := func(format string, args ...interface{}) {
 			fmt.Fprintf(flag.CommandLine.Output(), format, args...)
@@ -65,14 +71,17 @@ func run(ctx context.Context) error {
 		content = strings.TrimSuffix(content, "\n")
 	}
 
-	var (
-		accountSID = os.Getenv("TWILIO_ACCOUNT_SID")
-		authToken  = os.Getenv("TWILIO_AUTH_TOKEN")
-	)
+	c, err := cfgutil.ParseFile[twipi.Config](configFile)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse config file")
+	}
 
-	twipiClient := twipi.NewClient(accountSID, authToken)
+	twipiClient := twipi.NewClient()
+	for _, account := range c.Twipi.Accounts {
+		twipiClient.AddAccount(account.Value())
+	}
 
-	err := twipiClient.SendSMS(ctx, twipi.Message{
+	err = twipiClient.SendSMS(ctx, twipi.Message{
 		From: from,
 		To:   to,
 		Body: content,
