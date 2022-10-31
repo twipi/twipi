@@ -241,6 +241,10 @@ func (l *Loader) Start(ctx context.Context) error {
 	errg, ctx := errgroup.WithContext(ctx)
 
 	if l.twipi != nil {
+		errg.Go(func() error {
+			l.twipi.UpdateTwilio(ctx)
+			return nil
+		})
 		defer l.twipi.Close()
 	}
 
@@ -256,6 +260,7 @@ func (l *Loader) Start(ctx context.Context) error {
 
 	for name, handler := range l.handlers {
 		if !l.enabled[name] {
+			log := logger.FromContext(ctx)
 			log.Println("skipping disabled module", name)
 			continue
 		}

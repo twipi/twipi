@@ -89,6 +89,12 @@ func run(ctx context.Context) error {
 		log.Println("message listener exiting")
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		twipisrv.UpdateTwilio(ctx)
+	}()
+
 	twipisrv.Message.SubscribeMessages(from, msgCh)
 	defer twipisrv.Message.UnsubscribeMessages(msgCh)
 

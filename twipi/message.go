@@ -38,7 +38,7 @@ func (m *Message) tryReply(msg Message) bool {
 	}
 }
 
-// MessageHandler is
+// MessageHandler is a handler for incoming messages.
 type MessageHandler struct {
 	subs pubsub.Subscriber[Message]
 	msgs chan Message
