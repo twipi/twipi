@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/diamondburned/arikawa/v3 v3.1.0
 	github.com/diamondburned/listener v0.0.0-20220315064222-63f8ebce5f60
+	github.com/diamondburned/tmplutil v0.0.0-20220124221250-5dbe568d9e70
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/pelletier/go-toml/v2 v2.0.5
 	github.com/pkg/errors v0.9.1
@@ -24,7 +25,7 @@ require (
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	golang.org/x/mod v0.4.2 // indirect
-	golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab // indirect
+	golang.org/x/sys v0.0.0-20221010170243-090e33056c14 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
 	golang.org/x/tools v0.1.1 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect

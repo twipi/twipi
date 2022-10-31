@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 
+	"github.com/diamondburned/twikit/cmd/twidiscord/twidiscord"
 	"github.com/pkg/errors"
 )
 
@@ -13,13 +14,26 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
+// InternalError is returned by stores in case of an internal error.
+type InternalError struct {
+	Err error
+}
+
+func (e InternalError) Error() string {
+	return "internal error: " + e.Err.Error()
+}
+
+func (e InternalError) Unwrap() error {
+	return e.Err
+}
+
 // Open opens a new Storer. The returned Storer must be closed after use.
 //
 // The following schemes are supported:
 //
 // 	- sqlite
 //
-func Open(ctx context.Context, urlStr string, ro bool) (any, error) {
+func Open(ctx context.Context, urlStr string, ro bool) (twidiscord.Storer, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse database URL")

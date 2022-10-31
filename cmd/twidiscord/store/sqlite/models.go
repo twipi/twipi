@@ -6,6 +6,12 @@ package sqlite
 
 import ()
 
+type Account struct {
+	UserNumber   string
+	TwilioNumber string
+	DiscordToken string
+}
+
 type ChannelSerial struct {
 	UserID    int64
 	ChannelID int64

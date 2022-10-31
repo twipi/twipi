@@ -4,10 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/twikit/cmd/twidiscord/store/sqlite"
+	"github.com/diamondburned/twikit/cmd/twidiscord/twidiscord"
+	"github.com/diamondburned/twikit/twipi"
 	"github.com/pkg/errors"
 
 	_ "embed"
@@ -24,9 +29,22 @@ type SQLite struct {
 	db *sql.DB
 }
 
+var _ twidiscord.Storer = (*SQLite)(nil)
+
 // OpenSQLite creates a new SQLite database.
-func OpenSQLite(ctx context.Context, path string, ro bool) (*SQLite, error) {
-	sqlDB, err := sql.Open("sqlite", path)
+func OpenSQLite(ctx context.Context, uri string, ro bool) (*SQLite, error) {
+	path := uri
+
+	u, err := url.Parse(uri)
+	if err == nil {
+		path = u.Path
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+		return nil, errors.Wrap(err, "failed to create SQLite directory")
+	}
+
+	sqlDB, err := sql.Open("sqlite", uri)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to open SQLite database")
 	}
@@ -74,8 +92,29 @@ func (s *SQLite) ChannelToSerial(ctx context.Context, uID discord.UserID, chID d
 	n, err := s.q.ChannelToSerial(ctx, sqlite.ChannelToSerialParams{
 		UserID:    int64(uID),
 		ChannelID: int64(chID),
-		UserID_2:  int64(uID),
 	})
+	if err != nil {
+		err = sqliteErr(err)
+		if !errors.Is(err, ErrNotFound) {
+			return 0, err
+		}
+
+		// If the channel is not found, then we need to create a new serial.
+		err = s.q.NewChannelSerial(ctx, sqlite.NewChannelSerialParams{
+			UserID:    int64(uID),
+			ChannelID: int64(chID),
+			UserID_2:  int64(uID),
+		})
+		if err != nil {
+			return 0, sqliteErr(err)
+		}
+
+		n, err = s.q.ChannelToSerial(ctx, sqlite.ChannelToSerialParams{
+			UserID:    int64(uID),
+			ChannelID: int64(chID),
+		})
+	}
+
 	return int(n), sqliteErr(err)
 }
 
@@ -85,6 +124,46 @@ func (s *SQLite) SerialToChannel(ctx context.Context, uID discord.UserID, serial
 		Serial: int64(serial),
 	})
 	return discord.ChannelID(id), sqliteErr(err)
+}
+
+func (s *SQLite) Account(ctx context.Context, userNumber twipi.PhoneNumber) (twidiscord.Account, error) {
+	v, err := s.q.Account(ctx, string(userNumber))
+	if err != nil {
+		return twidiscord.Account{}, sqliteErr(err)
+	}
+
+	return twidiscord.Account{
+		UserNumber:   userNumber,
+		TwilioNumber: twipi.PhoneNumber(v.TwilioNumber),
+		DiscordToken: v.DiscordToken,
+	}, nil
+}
+
+func (s *SQLite) Accounts(ctx context.Context) ([]twidiscord.Account, error) {
+	rows, err := s.q.Accounts(ctx)
+	if err != nil {
+		return nil, sqliteErr(err)
+	}
+
+	accs := make([]twidiscord.Account, len(rows))
+	for i, v := range rows {
+		accs[i] = twidiscord.Account{
+			UserNumber:   twipi.PhoneNumber(v.UserNumber),
+			TwilioNumber: twipi.PhoneNumber(v.TwilioNumber),
+			DiscordToken: v.DiscordToken,
+		}
+	}
+
+	return accs, nil
+}
+
+func (s *SQLite) SetAccount(ctx context.Context, info twidiscord.Account) error {
+	err := s.q.SetAccount(ctx, sqlite.SetAccountParams{
+		UserNumber:   string(info.UserNumber),
+		TwilioNumber: string(info.TwilioNumber),
+		DiscordToken: info.DiscordToken,
+	})
+	return sqliteErr(err)
 }
 
 func sqliteErr(err error) error {

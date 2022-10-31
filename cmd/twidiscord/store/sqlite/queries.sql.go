@@ -9,27 +9,86 @@ import (
 	"context"
 )
 
+const account = `-- name: Account :one
+SELECT twilio_number, discord_token FROM accounts WHERE user_number = ? LIMIT 1
+`
+
+type AccountRow struct {
+	TwilioNumber string
+	DiscordToken string
+}
+
+func (q *Queries) Account(ctx context.Context, userNumber string) (AccountRow, error) {
+	row := q.db.QueryRowContext(ctx, account, userNumber)
+	var i AccountRow
+	err := row.Scan(&i.TwilioNumber, &i.DiscordToken)
+	return i, err
+}
+
+const accounts = `-- name: Accounts :many
+SELECT user_number, twilio_number, discord_token FROM accounts
+`
+
+func (q *Queries) Accounts(ctx context.Context) ([]Account, error) {
+	rows, err := q.db.QueryContext(ctx, accounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Account
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(&i.UserNumber, &i.TwilioNumber, &i.DiscordToken); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const channelToSerial = `-- name: ChannelToSerial :one
-INSERT OR IGNORE
-	INTO channel_serials (user_id, channel_id, serial)
-	VALUES (
-		?,
-		?,
-		(SELECT COALESCE(MAX(serial) + 1, 1) FROM channel_serials WHERE channel_serials.user_id = ?))
-	RETURNING serial
+SELECT serial FROM channel_serials WHERE user_id = ? AND channel_id = ?
 `
 
 type ChannelToSerialParams struct {
 	UserID    int64
 	ChannelID int64
-	UserID_2  int64
 }
 
 func (q *Queries) ChannelToSerial(ctx context.Context, arg ChannelToSerialParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, channelToSerial, arg.UserID, arg.ChannelID, arg.UserID_2)
+	row := q.db.QueryRowContext(ctx, channelToSerial, arg.UserID, arg.ChannelID)
 	var serial int64
 	err := row.Scan(&serial)
 	return serial, err
+}
+
+const newChannelSerial = `-- name: NewChannelSerial :exec
+INSERT OR IGNORE
+	INTO channel_serials (user_id, channel_id, serial)
+	VALUES (
+		?,
+		?,
+		(SELECT COALESCE(MAX(serial) + 1, 1)
+			FROM channel_serials
+			WHERE channel_serials.user_id = ?)
+	)
+`
+
+type NewChannelSerialParams struct {
+	UserID    int64
+	ChannelID int64
+	UserID_2  int64
+}
+
+func (q *Queries) NewChannelSerial(ctx context.Context, arg NewChannelSerialParams) error {
+	_, err := q.db.ExecContext(ctx, newChannelSerial, arg.UserID, arg.ChannelID, arg.UserID_2)
+	return err
 }
 
 const serialToChannel = `-- name: SerialToChannel :one
@@ -46,4 +105,19 @@ func (q *Queries) SerialToChannel(ctx context.Context, arg SerialToChannelParams
 	var channel_id int64
 	err := row.Scan(&channel_id)
 	return channel_id, err
+}
+
+const setAccount = `-- name: SetAccount :exec
+REPLACE INTO accounts (user_number, twilio_number, discord_token) VALUES (?, ?, ?)
+`
+
+type SetAccountParams struct {
+	UserNumber   string
+	TwilioNumber string
+	DiscordToken string
+}
+
+func (q *Queries) SetAccount(ctx context.Context, arg SetAccountParams) error {
+	_, err := q.db.ExecContext(ctx, setAccount, arg.UserNumber, arg.TwilioNumber, arg.DiscordToken)
+	return err
 }

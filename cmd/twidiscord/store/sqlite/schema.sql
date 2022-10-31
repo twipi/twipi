@@ -10,3 +10,11 @@ CREATE TABLE channel_serials (
 	UNIQUE(user_id, channel_id),
 	UNIQUE(user_id, serial)
 );
+
+-- NEW VERSION --
+
+CREATE TABLE accounts (
+	user_number TEXT PRIMARY KEY,
+	twilio_number TEXT NOT NULL,
+	discord_token TEXT NOT NULL UNIQUE
+);

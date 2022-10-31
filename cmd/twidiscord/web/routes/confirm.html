@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+{{ template "header" }}
+{{ template "title" "Register" }}
+
+<main>
+	<h1>twidiscord</h1>
+	<h2>Confirm your Discord account</h2>
+
+	<p class="help">
+		We've sent an SMS to your phone number with a confirmation code.
+		Enter the code below to confirm your account.
+	</p>
+
+	<form method="post" action="/discord/register/confirm">
+		<formset>
+			<label for="confirmation-code">Confirmation Code</label>
+			<input
+				type="number"
+				inputmode="numeric"
+				pattern="[0-9]{,6}"
+				placeholder="000000"
+				id="confirmation-code" name="confirmation-code"
+				required
+			/>
+		</formset>
+		<button type="submit">Confirm</button>
+	</form>
+</main>

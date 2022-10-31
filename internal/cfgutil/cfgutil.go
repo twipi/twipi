@@ -61,7 +61,11 @@ type Env[T ~string] string
 
 var envCache sync.Map
 
-func (env Env[T]) String() T {
+func (env Env[T]) String() string {
+	return string(env.Value())
+}
+
+func (env Env[T]) Value() T {
 	if strings.HasPrefix(string(env), "$") {
 		if v, ok := envCache.Load(string(env)); ok {
 			return T(v.(string))

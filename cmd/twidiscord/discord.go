@@ -14,11 +14,11 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/twikit/cmd/twidiscord/store"
+	"github.com/diamondburned/twikit/cmd/twidiscord/twidiscord"
 	"github.com/diamondburned/twikit/logger"
 	"github.com/diamondburned/twikit/twicli"
 	"github.com/diamondburned/twikit/twipi"
 	"github.com/pkg/errors"
-	"golang.org/x/sync/errgroup"
 )
 
 var hostname string
@@ -32,54 +32,89 @@ func init() {
 	}
 }
 
-type storer interface {
-	ChannelToSerial(context.Context, discord.UserID, discord.ChannelID) (int, error)
-	SerialToChannel(context.Context, discord.UserID, int) (discord.ChannelID, error)
-}
-
-var _ storer = (*store.SQLite)(nil)
-
 type handler struct {
-	twipi    *twipi.ConfiguredServer
-	accounts []*accountHandler
+	twipi  *twipi.ConfiguredServer
+	config *twidiscord.Config
+	store  twidiscord.Storer
+
+	accountMu sync.Mutex
+	accounts  []*accountHandler
+
+	wg  sync.WaitGroup
+	ctx context.Context
 }
 
-func bindHandler(twipisrv *twipi.ConfiguredServer, cfg *config, store storer) (*handler, error) {
-	h := &handler{
-		twipi:    twipisrv,
-		accounts: make([]*accountHandler, 0, len(cfg.Discord.Accounts)),
+func bindHandler(twipisrv *twipi.ConfiguredServer, cfg *twidiscord.Config, store twidiscord.Storer) *handler {
+	return &handler{
+		twipi:  twipisrv,
+		config: cfg,
+		store:  store,
+		ctx:    context.Background(),
 	}
-
-	for _, account := range cfg.Discord.Accounts {
-		ah := newAccountHandler(twipisrv, account, store)
-		ah.bind()
-		h.accounts = append(h.accounts, ah)
-	}
-
-	return h, nil
 }
 
-// Connect connects all the accounts.
+// Connect connects all the accounts. It blocks until ctx is canceled.
 func (h *handler) Connect(ctx context.Context) error {
-	ctx = logger.WithLogPrefix(ctx, "twidiscord:")
+	h.ctx = logger.WithLogPrefix(ctx, "twidiscord:")
 
-	var errg errgroup.Group
+	// wg should block until ctx returns.
+	h.wg.Add(1)
+	go func() {
+		<-ctx.Done()
+		h.wg.Done()
+	}()
 
-	for _, account := range h.accounts {
-		account := account
-		errg.Go(func() error {
-			account.ctx = ctx
-			account.ctx = logger.WithLogPrefix(account.ctx, string(account.UserNumber.String()))
-			account.discord = account.discord.WithContext(account.ctx)
-
-			log := logger.FromContext(account.ctx)
-			log.Println("connecting to Discord account")
-
-			return account.discord.Connect(ctx)
-		})
+	accounts, err := h.store.Accounts(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to load accounts")
 	}
 
-	return errg.Wait()
+	for _, account := range accounts {
+		h.AddAccount(account)
+	}
+
+	h.wg.Wait()
+	return nil
+}
+
+// AddAccount adds an account to the handler. It will connect to the account
+// immediately.
+func (h *handler) AddAccount(account twidiscord.Account) {
+	ah := newAccountHandler(h.twipi, account, h.store)
+
+	h.accountMu.Lock()
+	defer h.accountMu.Unlock()
+
+	for _, a := range h.accounts {
+		if a.UserNumber == ah.UserNumber {
+			return
+		}
+	}
+
+	h.accounts = append(h.accounts, ah)
+
+	h.wg.Add(1)
+	go func() error {
+		defer h.wg.Done()
+
+		ah.ctx = h.ctx
+		ah.ctx = logger.WithLogPrefix(ah.ctx, string(ah.UserNumber))
+		ah.discord = ah.discord.WithContext(ah.ctx)
+		ah.bind()
+
+		if err := ah.discord.Connect(h.ctx); err != nil {
+			log := logger.FromContext(ah.ctx)
+			log.Printf("failed to connect to Discord for user %s: %v", ah.UserNumber, err)
+
+			// Tell the user that we failed to connect.
+			ah.twipi.Client.SendSMS(ah.ctx, twipi.Message{
+				From: ah.TwilioNumber,
+				To:   ah.UserNumber,
+				Body: fmt.Sprintf("Sorry, we couldn't connect to Discord: %v", err),
+			})
+		}
+		return nil
+	}()
 }
 
 func (h *handler) Command() twicli.Command {
@@ -104,7 +139,7 @@ func (h *handler) Command() twicli.Command {
 func (h *handler) accountDispatcher(method func(*accountHandler, twicli.Message) error) twicli.ActionFunc {
 	return func(_ context.Context, src twicli.Message) error {
 		for _, account := range h.accounts {
-			if account.UserNumber.String() == src.From {
+			if account.UserNumber == src.From {
 				return method(account, src)
 			}
 		}
@@ -114,11 +149,26 @@ func (h *handler) accountDispatcher(method func(*accountHandler, twicli.Message)
 	}
 }
 
+type accountAdder handler
+
+func (h *handler) accountAdder() *accountAdder {
+	return (*accountAdder)(h)
+}
+
+func (a *accountAdder) AddAccount(ctx context.Context, account twidiscord.Account) error {
+	if err := a.store.SetAccount(ctx, account); err != nil {
+		return err
+	}
+
+	(*handler)(a).AddAccount(account)
+	return nil
+}
+
 type accountHandler struct {
-	configAccount
+	twidiscord.Account
 	twipi   *twipi.ConfiguredServer
 	discord *state.State
-	store   storer
+	store   twidiscord.Storer
 
 	fragmentMu sync.Mutex
 	fragments  map[string]messageFragment
@@ -126,20 +176,21 @@ type accountHandler struct {
 	ctx context.Context
 }
 
-func newAccountHandler(twipisrv *twipi.ConfiguredServer, account configAccount, store storer) *accountHandler {
-	id := gateway.DefaultIdentifier(account.Token.String())
+func newAccountHandler(twipisrv *twipi.ConfiguredServer, account twidiscord.Account, store twidiscord.Storer) *accountHandler {
+	id := gateway.DefaultIdentifier(account.DiscordToken)
 	id.Properties = gateway.IdentifyProperties{
 		OS:      runtime.GOOS,
 		Device:  fmt.Sprintf("twikit/%s", hostname),
 		Browser: "twidiscord",
 	}
+
 	return &accountHandler{
-		configAccount: account,
-		twipi:         twipisrv,
-		discord:       state.NewWithIdentifier(id),
-		store:         store,
-		fragments:     make(map[string]messageFragment),
-		ctx:           context.Background(),
+		Account:   account,
+		twipi:     twipisrv,
+		discord:   state.NewWithIdentifier(id),
+		store:     store,
+		fragments: make(map[string]messageFragment),
+		ctx:       context.Background(),
 	}
 }
 
@@ -191,8 +242,8 @@ func (h *accountHandler) onMessage(msg *discord.Message, edited bool) {
 	}
 
 	err = h.twipi.Client.SendSMS(h.ctx, twipi.Message{
-		From: h.TwilioNumber.String(),
-		To:   h.UserNumber.String(),
+		From: h.TwilioNumber,
+		To:   h.UserNumber,
 		Body: body,
 	})
 	if err != nil {
