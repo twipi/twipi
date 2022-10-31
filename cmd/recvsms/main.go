@@ -93,7 +93,7 @@ func run(ctx context.Context) error {
 	defer twipisrv.Message.UnsubscribeMessages(msgCh)
 
 	server := http.Server{
-		Addr:    c.Twid.HTTP.ListenAddr,
+		Addr:    c.Twid.HTTP.ListenAddr.Value(),
 		Handler: twipisrv,
 	}
 
