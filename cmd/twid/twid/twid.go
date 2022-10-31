@@ -2,9 +2,11 @@ package twid
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 
@@ -126,6 +128,28 @@ func NewLoader(modules []Module) *Loader {
 // NewGlobalLoader creates a new loader with the global modules.
 func NewGlobalLoader() *Loader {
 	return NewLoader(modules)
+}
+
+// Main runs the twid server as if it were to be executed from a package main
+// program. This function is extremely useful when code-generating files.
+func Main() {
+	configFile := "twipi.toml"
+
+	flag.StringVar(&configFile, "c", configFile, "config file")
+	flag.Parse()
+
+	loader := NewGlobalLoader()
+
+	if err := loader.LoadConfigFile(configFile); err != nil {
+		log.Fatalln("failed to load config file:", err)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	if err := loader.Start(ctx); err != nil {
+		log.Fatalln("failed to start twid:", err)
+	}
 }
 
 // LoadConfigFile loads the configuration file from the given path into all the
