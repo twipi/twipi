@@ -189,7 +189,7 @@ checkNumber:
 	for number := range serviceNumbers {
 		if nilz(number.PhoneNumber) == string(client.Account.PhoneNumber) {
 			if createdService {
-				log.Println("successfully set up service (created new service)")
+				log.Println("successfully set up service")
 			}
 			return
 		}
