@@ -55,7 +55,7 @@ func run(ctx context.Context) error {
 
 	r := chi.NewMux()
 	r.Mount("/discord", routes.Mount(twipisrv, c, handler.accountAdder()))
-	r.Handle("/", twipisrv)
+	r.Mount("/", twipisrv)
 
 	errg, ctx := errgroup.WithContext(ctx)
 	errg.Go(func() error {
