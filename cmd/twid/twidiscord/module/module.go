@@ -12,7 +12,7 @@ func init() {
 
 // Module is the twidiscord module.
 var Module = twid.Module{
-	Name: "twidiscord",
+	Name: "discord",
 	New: func() twid.Handler {
 		return &Handler{ctx: context.Background()}
 	},
