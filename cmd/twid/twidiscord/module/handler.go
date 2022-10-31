@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/ws"
+	"github.com/diamondburned/ningen/v3"
 	"github.com/diamondburned/twikit/cmd/twid/twid"
 	"github.com/diamondburned/twikit/cmd/twid/twidiscord"
 	"github.com/diamondburned/twikit/cmd/twid/twidiscord/store"
@@ -150,6 +152,10 @@ func (h *Handler) Command() twicli.Command {
 				Prefix: twicli.NewWordPrefix("help", true),
 				Action: h.accountDispatcher((*accountHandler).sendHelp),
 			},
+			{
+				Prefix: twicli.NewWordPrefix("summarize", true),
+				Action: h.accountDispatcher((*accountHandler).sendSummarize),
+			},
 		}),
 	}
 }
@@ -229,7 +235,7 @@ func (m *Handler) Start(ctx context.Context) error {
 type accountHandler struct {
 	twidiscord.Account
 	twipi   *twipi.ConfiguredServer
-	discord *state.State
+	discord *ningen.State
 	store   twidiscord.Storer
 
 	fragmentMu sync.Mutex
@@ -259,7 +265,7 @@ func newAccountHandler(twipisrv *twipi.ConfiguredServer, account twidiscord.Acco
 	return &accountHandler{
 		Account:   account,
 		twipi:     twipisrv,
-		discord:   state.NewWithIdentifier(id),
+		discord:   ningen.FromState(state.NewWithIdentifier(id)),
 		store:     store,
 		fragments: make(map[string]messageFragment),
 		ctx:       context.Background(),
@@ -367,6 +373,11 @@ func (h *accountHandler) onMessage(msg *discord.Message, edited bool) {
 		return
 	}
 
+	// Check if the channel is muted. Ignore muted channels.
+	if h.discord.ChannelIsMuted(msg.ChannelID, true) {
+		return
+	}
+
 	// Check if we're muted or if we have any existing Discord sessions.
 	if h.hasOtherSessions() || h.store.NumberIsMuted(h.ctx, h.TwilioNumber) {
 		return
@@ -402,6 +413,7 @@ func (h *accountHandler) sendHelp(src twicli.Message) error {
 		"Discord, message ^0 the first part (...)\n"+
 		"Discord, message ^0 the final part\n"+
 		"Discord, message alieb Hello!\n"+
+		"Discord, summarize\n"+
 		"Discord, mute\n"+
 		"Discord, unmute\n"+
 		"Discord, help",
@@ -424,6 +436,56 @@ func (h *accountHandler) sendUnmute(src twicli.Message) error {
 
 	return h.twipi.Client.ReplySMS(h.ctx, src.Message,
 		"Unmuted. You will receive messages again.")
+}
+
+func (h *accountHandler) sendSummarize(src twicli.Message) error {
+	dms, err := h.discord.Cabinet.PrivateChannels()
+	if err != nil {
+		return err
+	}
+
+	sort.Slice(dms, func(i, j int) bool {
+		return dms[i].LastMessageID < dms[j].LastMessageID
+	})
+
+	type unreadChannel struct {
+		discord.Channel
+		MentionCount int
+	}
+
+	var unreads []unreadChannel
+
+	for _, dm := range dms {
+		if h.discord.ChannelIsMuted(dm.ID, true) {
+			continue
+		}
+
+		readState := h.discord.ReadState.ReadState(dm.ID)
+		if readState == nil || !readState.LastMessageID.IsValid() {
+			continue
+		}
+
+		if readState.MentionCount == 0 {
+			continue
+		}
+
+		unreads = append(unreads, unreadChannel{
+			Channel:      dm,
+			MentionCount: readState.MentionCount,
+		})
+	}
+
+	if len(unreads) == 0 {
+		return h.twipi.Client.ReplySMS(h.ctx, src.Message, "No unread messages.")
+	}
+
+	var buf strings.Builder
+	fmt.Fprintf(&buf, "You have %d unread channels:\n", len(unreads))
+	for _, unread := range unreads {
+		fmt.Fprintf(&buf, "%s: %d\n", chName(unread.Channel), unread.MentionCount)
+	}
+
+	return h.twipi.Client.ReplySMS(h.ctx, src.Message, buf.String())
 }
 
 var (
@@ -517,13 +579,22 @@ func (h *accountHandler) matchChReference(str string) (discord.ChannelID, error)
 
 func matchDM(dms []discord.Channel, str string) *discord.Channel {
 	for i, dm := range dms {
-		if false ||
-			(dm.Name != "" && twicli.PatternMatch(dm.Name, str)) ||
-			(len(dm.DMRecipients) == 1 && twicli.PatternMatch(dm.DMRecipients[0].Username, str)) {
-
+		if twicli.PatternMatch(chName(dm), str) {
 			return &dms[i]
 		}
 	}
 
 	return nil
+}
+
+func chName(ch discord.Channel) string {
+	if ch.Name != "" {
+		return ch.Name
+	}
+
+	if len(ch.DMRecipients) == 1 {
+		return ch.DMRecipients[0].Username
+	}
+
+	return ""
 }
