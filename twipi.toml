@@ -1,21 +1,27 @@
+[twid]
+enable = true
+
+[twid.http]
 # ssh srv.us -R 1:/var/run/twipi.sock
 listen_addr = "unix:///run/user/1000/twipi.sock"
 
-[[twipi.accounts]]
-phone_number = "${TWILIO_PHONE_NUMBER}"
-account_sid = "${TWILIO_ACCOUNT_SID}"
-auth_token = "${TWILIO_AUTH_TOKEN}"
+[twipi]
+enable = true
 
 [twipi.webhook.message]
 enable = true
 incoming_endpoint = "/webhooks/messages/incoming"
 delivery_endpoint = "/webhooks/messages/delivery"
 
+[[twipi.accounts]]
+phone_number = "${TWILIO_PHONE_NUMBER}"
+account_sid = "${TWILIO_ACCOUNT_SID}"
+auth_token = "${TWILIO_AUTH_TOKEN}"
+
 [discord]
 enable = true
 # This is unused.
 secrets_dir = "/tmp/twidiscord/secrets"
 database_uri = "sqlite:///tmp/twidiscord/twidiscord.db"
-
 known_numbers = [ "${TWILIO_PHONE_NUMBER}" ]
 allowed_users = [ "${DISCORD_PHONE_NUMBER}" ]

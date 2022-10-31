@@ -21,6 +21,10 @@ var (
 	configFile = "twipi.toml"
 )
 
+type Config struct {
+	Twipi twipi.Config `toml:"twipi" json:"twipi"`
+}
+
 func main() {
 	flag.StringVar(&configFile, "c", configFile, "config file")
 	flag.Usage = func() {
@@ -71,7 +75,7 @@ func run(ctx context.Context) error {
 		content = strings.TrimSuffix(content, "\n")
 	}
 
-	c, err := cfgutil.ParseFile[twipi.Config](configFile)
+	c, err := cfgutil.ParseFile[Config](configFile)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse config file")
 	}

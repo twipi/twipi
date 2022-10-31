@@ -3,8 +3,8 @@ package routes
 import (
 	"net/http"
 
-	"github.com/diamondburned/twikit/cmd/twidiscord/twidiscord"
-	"github.com/diamondburned/twikit/cmd/twidiscord/web"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord/web"
 	"github.com/pkg/errors"
 )
 

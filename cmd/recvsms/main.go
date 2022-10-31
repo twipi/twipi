@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/diamondburned/listener"
+	"github.com/diamondburned/twikit/cmd/twid/twid"
 	"github.com/diamondburned/twikit/internal/cfgutil"
 	"github.com/diamondburned/twikit/twipi"
 	"github.com/pkg/errors"
@@ -24,8 +25,8 @@ var (
 )
 
 type Config struct {
-	ListenAddr string `toml:"listen_addr" json:"listen_addr"`
-	twipi.Config
+	Twid  twid.Config  `toml:"twid" json:"twid"`
+	Twipi twipi.Config `toml:"twipi" json:"twipi"`
 }
 
 func main() {
@@ -68,7 +69,7 @@ func run(ctx context.Context) error {
 		return errors.Wrap(err, "failed to parse config file")
 	}
 
-	twipisrv, err := twipi.NewConfiguredServer(c.Config)
+	twipisrv, err := twipi.NewConfiguredServer(c.Twipi)
 	if err != nil {
 		return err
 	}
@@ -92,7 +93,7 @@ func run(ctx context.Context) error {
 	defer twipisrv.Message.UnsubscribeMessages(msgCh)
 
 	server := http.Server{
-		Addr:    ":8080",
+		Addr:    c.Twid.HTTP.ListenAddr,
 		Handler: twipisrv,
 	}
 

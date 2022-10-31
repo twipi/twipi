@@ -9,21 +9,19 @@ import (
 // configuration file of choice. The primary supported languages are JSON and
 // TOML.
 type Config struct {
-	Twipi struct {
-		// Secrets is the secret section of Config. It contains sensitive
-		// information such as the Twilio account SID and auth token. It is
-		// strongly discouraged to store this information in a regular config
-		// file. Instead, use environment variables or a separate, more
-		// protected file.
-		Accounts []ConfigAccount
-		Webhook  struct {
-			Message struct {
-				Enable           bool   `toml:"enable" json:"enable"`
-				IncomingEndpoint string `toml:"incoming_endpoint" json:"incoming_endpoint"`
-				DeliveryEndpoint string `toml:"delivery_endpoint" json:"delivery_endpoint"`
-			} `toml:"message" json:"message"`
-		} `toml:"webhook" json:"webhook"`
-	} `toml:"twipi" json:"twipi"`
+	// Secrets is the secret section of Config. It contains sensitive
+	// information such as the Twilio account SID and auth token. It is
+	// strongly discouraged to store this information in a regular config
+	// file. Instead, use environment variables or a separate, more
+	// protected file.
+	Accounts []ConfigAccount
+	Webhook  struct {
+		Message struct {
+			Enable           bool   `toml:"enable" json:"enable"`
+			IncomingEndpoint string `toml:"incoming_endpoint" json:"incoming_endpoint"`
+			DeliveryEndpoint string `toml:"delivery_endpoint" json:"delivery_endpoint"`
+		} `toml:"message" json:"message"`
+	} `toml:"webhook" json:"webhook"`
 }
 
 // ConfigAccount is an account config block.
@@ -52,22 +50,21 @@ type ConfiguredServer struct {
 
 // NewConfiguredServer creates a new ConfiguredServer from a Config.
 func NewConfiguredServer(c Config) (*ConfiguredServer, error) {
-	if len(c.Twipi.Accounts) == 0 {
+	if len(c.Accounts) == 0 {
 		return nil, errors.New("no accounts given")
 	}
 
-	twipic := c.Twipi
 	s := ConfiguredServer{
 		WebhookRouter: NewWebhookRouter(),
 		Client:        NewClient(),
 	}
 
-	for _, account := range twipic.Accounts {
+	for _, account := range c.Accounts {
 		s.Client.AddAccount(account.Value())
 	}
 
-	if twipic.Webhook.Message.Enable {
-		cfg := twipic.Webhook.Message
+	if c.Webhook.Message.Enable {
+		cfg := c.Webhook.Message
 		s.Message = NewMessageHandler(cfg.IncomingEndpoint, cfg.DeliveryEndpoint)
 		s.RegisterWebhook(s.Message)
 	}

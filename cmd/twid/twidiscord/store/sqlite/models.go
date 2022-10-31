@@ -4,8 +4,6 @@
 
 package sqlite
 
-import ()
-
 type Account struct {
 	UserNumber   string
 	TwilioNumber string

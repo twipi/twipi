@@ -1,6 +1,7 @@
 package cfgutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,21 +15,35 @@ import (
 )
 
 // ParseTOML parses a TOML config from an io.Reader.
-func ParseTOML[T any](r io.Reader) (*T, error) {
-	var c T
-	if err := toml.NewDecoder(r).Decode(&c); err != nil {
-		return nil, err
-	}
-	return &c, nil
+func ParseTOML(r io.Reader, dst any) error {
+	return toml.NewDecoder(r).Decode(dst)
 }
 
 // ParseJSON parses a JSON config from an io.Reader.
-func ParseJSON[T any](r io.Reader) (*T, error) {
-	var c T
-	if err := json.NewDecoder(r).Decode(&c); err != nil {
-		return nil, err
+func ParseJSON(r io.Reader, dst any) error {
+	return json.NewDecoder(r).Decode(dst)
+}
+
+// Parse parses a reader.
+func Parse(f io.Reader, configType string, dst any) error {
+	switch configType {
+	case "toml":
+		return ParseTOML(f, dst)
+	case "json":
+		return ParseJSON(f, dst)
+	default:
+		return fmt.Errorf("unsupported config type %s", configType)
 	}
-	return &c, nil
+}
+
+// ParseMany parses b into multiple destinations.
+func ParseMany(b []byte, configType string, dsts ...any) error {
+	for _, dst := range dsts {
+		if err := Parse(bytes.NewReader(b), configType, dst); err != nil {
+			return fmt.Errorf("cannot parse into %T: %w", dst, err)
+		}
+	}
+	return nil
 }
 
 // ParseFile parses a config file from a path. The file extension is used to
@@ -36,23 +51,15 @@ func ParseJSON[T any](r io.Reader) (*T, error) {
 func ParseFile[T any](path string) (*T, error) {
 	ext := filepath.Ext(path)
 
-	switch ext {
-	case ".toml", ".json":
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to open config file")
-		}
-		defer f.Close()
-
-		switch filepath.Ext(path) {
-		case ".toml":
-			return ParseTOML[T](f)
-		case ".json":
-			return ParseJSON[T](f)
-		}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to open config file")
 	}
+	defer f.Close()
 
-	return nil, fmt.Errorf("unsupported config file extension %s", ext)
+	var v T
+	err = Parse(f, strings.TrimPrefix(ext, "."), &v)
+	return &v, err
 }
 
 // Env is a type that describes a value that can also be an environment

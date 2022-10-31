@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/diamondburned/twikit/cmd/twidiscord/store/sqlite"
-	"github.com/diamondburned/twikit/cmd/twidiscord/twidiscord"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord/store/sqlite"
 	"github.com/diamondburned/twikit/twipi"
 	"github.com/pkg/errors"
 
@@ -95,7 +95,7 @@ func (s *SQLite) ChannelToSerial(ctx context.Context, uID discord.UserID, chID d
 	})
 	if err != nil {
 		err = sqliteErr(err)
-		if !errors.Is(err, ErrNotFound) {
+		if !errors.Is(err, twidiscord.ErrNotFound) {
 			return 0, err
 		}
 
@@ -168,7 +168,7 @@ func (s *SQLite) SetAccount(ctx context.Context, info twidiscord.Account) error 
 
 func sqliteErr(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
+		return twidiscord.ErrNotFound
 	}
 	return err
 }

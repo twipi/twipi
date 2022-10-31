@@ -6,7 +6,10 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/twikit/internal/cfgutil"
 	"github.com/diamondburned/twikit/twipi"
+	"github.com/pkg/errors"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type Store struct {
 	SecretStorer
@@ -36,8 +39,6 @@ type Account struct {
 }
 
 type Config struct {
-	ListenAddr string `toml:"listen_addr" json:"listen_addr"`
-	twipi.Config
 	Discord struct {
 		DatabaseURI  cfgutil.EnvString                `toml:"database_uri" json:"database_uri"`
 		SecretsDir   cfgutil.EnvString                `toml:"secrets_dir" json:"secrets_dir"`

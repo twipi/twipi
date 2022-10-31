@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/diamondburned/twikit/cmd/twidiscord/twidiscord"
-	"github.com/diamondburned/twikit/cmd/twidiscord/web"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord/web"
 	"github.com/diamondburned/twikit/twipi"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
@@ -29,7 +29,7 @@ type registerHandler struct {
 	*chi.Mux
 
 	twipi        *twipi.ConfiguredServer
-	cfg          *twidiscord.Config
+	cfg          twidiscord.Config
 	accountAdder AccountAdder
 
 	confirmationMu sync.Mutex
@@ -43,7 +43,7 @@ type confirmationData struct {
 
 func newRegisterHandler(
 	twipi *twipi.ConfiguredServer,
-	cfg *twidiscord.Config,
+	cfg twidiscord.Config,
 	accountAdder AccountAdder) *registerHandler {
 
 	h := &registerHandler{

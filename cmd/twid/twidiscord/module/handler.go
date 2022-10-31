@@ -1,8 +1,9 @@
-package main
+package module
 
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"runtime"
@@ -13,8 +14,11 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/diamondburned/twikit/cmd/twidiscord/store"
-	"github.com/diamondburned/twikit/cmd/twidiscord/twidiscord"
+	"github.com/diamondburned/arikawa/v3/utils/ws"
+	"github.com/diamondburned/twikit/cmd/twid/twid"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord/store"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord/web/routes"
 	"github.com/diamondburned/twikit/logger"
 	"github.com/diamondburned/twikit/twicli"
 	"github.com/diamondburned/twikit/twipi"
@@ -32,9 +36,10 @@ func init() {
 	}
 }
 
-type handler struct {
+// Handler is the main handler that binds Twipi and Discord.
+type Handler struct {
 	twipi  *twipi.ConfiguredServer
-	config *twidiscord.Config
+	config twidiscord.Config
 	store  twidiscord.Storer
 
 	accountMu sync.Mutex
@@ -44,8 +49,16 @@ type handler struct {
 	ctx context.Context
 }
 
-func bindHandler(twipisrv *twipi.ConfiguredServer, cfg *twidiscord.Config, store twidiscord.Storer) *handler {
-	return &handler{
+var (
+	_ twid.Handler        = (*Handler)(nil)
+	_ twid.TwipiHandler   = (*Handler)(nil)
+	_ twid.HTTPCommander  = (*Handler)(nil)
+	_ twid.CommandHandler = (*Handler)(nil)
+)
+
+// NewHandler creates a new handler with the given twipi server and config.
+func NewHandler(twipisrv *twipi.ConfiguredServer, cfg twidiscord.Config, store twidiscord.Storer) *Handler {
+	return &Handler{
 		twipi:  twipisrv,
 		config: cfg,
 		store:  store,
@@ -53,33 +66,20 @@ func bindHandler(twipisrv *twipi.ConfiguredServer, cfg *twidiscord.Config, store
 	}
 }
 
-// Connect connects all the accounts. It blocks until ctx is canceled.
-func (h *handler) Connect(ctx context.Context) error {
-	h.ctx = logger.WithLogPrefix(ctx, "twidiscord:")
+// Config returns the local configuration instance for this module. It
+// implements twid.Handler.
+func (h *Handler) Config() any {
+	return &h.config
+}
 
-	// wg should block until ctx returns.
-	h.wg.Add(1)
-	go func() {
-		<-ctx.Done()
-		h.wg.Done()
-	}()
-
-	accounts, err := h.store.Accounts(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to load accounts")
-	}
-
-	for _, account := range accounts {
-		h.AddAccount(account)
-	}
-
-	h.wg.Wait()
-	return nil
+// BindTwipi implements twid.TwipiBinder.
+func (h *Handler) BindTwipi(twipisrv *twipi.ConfiguredServer) {
+	h.twipi = twipisrv
 }
 
 // AddAccount adds an account to the handler. It will connect to the account
 // immediately.
-func (h *handler) AddAccount(account twidiscord.Account) {
+func (h *Handler) AddAccount(account twidiscord.Account) {
 	ah := newAccountHandler(h.twipi, account, h.store)
 
 	h.accountMu.Lock()
@@ -94,7 +94,7 @@ func (h *handler) AddAccount(account twidiscord.Account) {
 	h.accounts = append(h.accounts, ah)
 
 	h.wg.Add(1)
-	go func() error {
+	go func() {
 		defer h.wg.Done()
 
 		ah.ctx = h.ctx
@@ -113,11 +113,11 @@ func (h *handler) AddAccount(account twidiscord.Account) {
 				Body: fmt.Sprintf("Sorry, we couldn't connect to Discord: %v", err),
 			})
 		}
-		return nil
 	}()
 }
 
-func (h *handler) Command() twicli.Command {
+// Command implements twid.HandlerCommander.
+func (h *Handler) Command() twicli.Command {
 	return twicli.Command{
 		Prefix: twicli.CombinePrefixes(
 			twicli.NewSlashPrefix("discord"),
@@ -136,7 +136,28 @@ func (h *handler) Command() twicli.Command {
 	}
 }
 
-func (h *handler) accountDispatcher(method func(*accountHandler, twicli.Message) error) twicli.ActionFunc {
+// HTTPHandler implements twid.HTTPCommander.
+func (h *Handler) HTTPHandler() http.Handler {
+	return routes.Mount(h.twipi, h.config, (*accountAdder)(h))
+}
+
+// HTTPPrefix implements twid.HTTPCommander.
+func (h *Handler) HTTPPrefix() string {
+	return "/discord"
+}
+
+type accountAdder Handler
+
+func (a *accountAdder) AddAccount(ctx context.Context, account twidiscord.Account) error {
+	if err := a.store.SetAccount(ctx, account); err != nil {
+		return err
+	}
+
+	(*Handler)(a).AddAccount(account)
+	return nil
+}
+
+func (h *Handler) accountDispatcher(method func(*accountHandler, twicli.Message) error) twicli.ActionFunc {
 	return func(_ context.Context, src twicli.Message) error {
 		for _, account := range h.accounts {
 			if account.UserNumber == src.From {
@@ -149,18 +170,34 @@ func (h *handler) accountDispatcher(method func(*accountHandler, twicli.Message)
 	}
 }
 
-type accountAdder handler
+// Start connects all the accounts. It blocks until ctx is canceled.
+func (m *Handler) Start(ctx context.Context) error {
+	db, err := store.Open(ctx, m.config.Discord.DatabaseURI.String(), false)
+	if err != nil {
+		return errors.Wrap(err, "failed to open database")
+	}
+	defer store.Close(db)
 
-func (h *handler) accountAdder() *accountAdder {
-	return (*accountAdder)(h)
-}
+	m.ctx = logger.WithLogPrefix(ctx, "twidiscord:")
+	m.store = db
 
-func (a *accountAdder) AddAccount(ctx context.Context, account twidiscord.Account) error {
-	if err := a.store.SetAccount(ctx, account); err != nil {
-		return err
+	// wg should block until ctx returns.
+	m.wg.Add(1)
+	go func() {
+		<-ctx.Done()
+		m.wg.Done()
+	}()
+
+	accounts, err := m.store.Accounts(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to load accounts")
 	}
 
-	(*handler)(a).AddAccount(account)
+	for _, account := range accounts {
+		m.AddAccount(account)
+	}
+
+	m.wg.Wait()
 	return nil
 }
 
@@ -199,13 +236,19 @@ type messageFragment struct {
 }
 
 func (h *accountHandler) bind() {
+	var tag string
 	h.discord.AddHandler(h.onMessageCreate)
 	h.discord.AddHandler(h.onMessageUpdate)
 	h.discord.AddHandler(func(*gateway.ReadyEvent) {
 		me, _ := h.discord.Me()
+		tag = me.Tag()
 
 		log := logger.FromContext(h.ctx)
-		log.Println("connected to Discord account", me.Tag())
+		log.Printf("connected to Discord account %q", tag)
+	})
+	h.discord.AddHandler(func(closeEv *ws.CloseEvent) {
+		log := logger.FromContext(h.ctx)
+		log.Printf("disconnected from Discord account %q (code %d)", tag, closeEv.Code)
 	})
 }
 
@@ -326,7 +369,7 @@ func (h *accountHandler) matchChReference(str string) (discord.ChannelID, error)
 
 		chID, err := h.store.SerialToChannel(h.ctx, me.ID, n)
 		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
+			if errors.Is(err, twidiscord.ErrNotFound) {
 				return 0, errors.New("no such serial")
 			}
 			return 0, errors.Wrap(err, "failed to lookup given serial")

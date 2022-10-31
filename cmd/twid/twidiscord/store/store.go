@@ -6,13 +6,11 @@ import (
 	"log"
 	"net/url"
 
-	"github.com/diamondburned/twikit/cmd/twidiscord/twidiscord"
+	"github.com/diamondburned/twikit/cmd/twid/twidiscord"
 	"github.com/pkg/errors"
 )
 
 //go:generate sqlc generate
-
-var ErrNotFound = errors.New("not found")
 
 // InternalError is returned by stores in case of an internal error.
 type InternalError struct {
