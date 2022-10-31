@@ -40,6 +40,8 @@ func Open(ctx context.Context, urlStr string, ro bool) (twidiscord.Storer, error
 	switch u.Scheme {
 	case "sqlite":
 		u.Scheme = "file"
+		u.Path = u.Host + u.Path
+		u.Host = ""
 		return OpenSQLite(ctx, u.String(), ro)
 	default:
 		return nil, errors.Errorf("unknown database scheme %q", u.Scheme)
