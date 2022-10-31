@@ -3,7 +3,7 @@ module github.com/diamondburned/twikit
 go 1.18
 
 require (
-	github.com/diamondburned/arikawa/v3 v3.1.0
+	github.com/diamondburned/arikawa/v3 v3.1.1-0.20221031113421-60ed12f3c05e
 	github.com/diamondburned/listener v0.0.0-20220315064222-63f8ebce5f60
 	github.com/diamondburned/tmplutil v0.0.0-20220124221250-5dbe568d9e70
 	github.com/go-chi/chi/v5 v5.0.7
@@ -24,6 +24,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/sys v0.0.0-20221010170243-090e33056c14 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect

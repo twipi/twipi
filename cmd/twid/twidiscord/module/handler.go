@@ -2,6 +2,7 @@ package module
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
@@ -62,7 +64,6 @@ func NewHandler(twipisrv *twipi.ConfiguredServer, cfg twidiscord.Config, store t
 		twipi:  twipisrv,
 		config: cfg,
 		store:  store,
-		ctx:    context.Background(),
 	}
 }
 
@@ -93,6 +94,12 @@ func (h *Handler) AddAccount(account twidiscord.Account) {
 
 	h.accounts = append(h.accounts, ah)
 
+	if h.ctx != nil {
+		h.startAccount(ah)
+	}
+}
+
+func (h *Handler) startAccount(ah *accountHandler) {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
@@ -102,7 +109,7 @@ func (h *Handler) AddAccount(account twidiscord.Account) {
 		ah.discord = ah.discord.WithContext(ah.ctx)
 		ah.bind()
 
-		if err := ah.discord.Connect(h.ctx); err != nil {
+		if err := ah.discord.Connect(ah.ctx); err != nil {
 			log := logger.FromContext(ah.ctx)
 			log.Printf("failed to connect to Discord for user %s: %v", ah.UserNumber, err)
 
@@ -199,6 +206,13 @@ func (m *Handler) Start(ctx context.Context) error {
 		m.wg.Done()
 	}()
 
+	// Start existing accounts.
+	m.accountMu.Lock()
+	for _, account := range m.accounts {
+		m.startAccount(account)
+	}
+	m.accountMu.Unlock()
+
 	accounts, err := m.store.Accounts(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to load accounts")
@@ -221,11 +235,21 @@ type accountHandler struct {
 	fragmentMu sync.Mutex
 	fragments  map[string]messageFragment
 
+	sessions struct {
+		sync.Mutex
+		ourID    string
+		sessions []gateway.UserSession
+	}
+
 	ctx context.Context
 }
 
 func newAccountHandler(twipisrv *twipi.ConfiguredServer, account twidiscord.Account, store twidiscord.Storer) *accountHandler {
 	id := gateway.DefaultIdentifier(account.DiscordToken)
+	id.Presence = &gateway.UpdatePresenceCommand{
+		Status: discord.IdleStatus,
+		AFK:    true,
+	}
 	id.Properties = gateway.IdentifyProperties{
 		OS:      runtime.GOOS,
 		Device:  fmt.Sprintf("twikit/%s", hostname),
@@ -247,20 +271,80 @@ type messageFragment struct {
 }
 
 func (h *accountHandler) bind() {
-	var tag string
 	h.discord.AddHandler(h.onMessageCreate)
 	h.discord.AddHandler(h.onMessageUpdate)
-	h.discord.AddHandler(func(*gateway.ReadyEvent) {
+
+	var tag string
+	h.discord.AddHandler(func(r *gateway.ReadyEvent) {
 		me, _ := h.discord.Me()
 		tag = me.Tag()
+
+		h.sessions.Lock()
+		h.sessions.sessions = r.Sessions
+		h.sessions.ourID = r.SessionID
+		h.sessions.Unlock()
 
 		log := logger.FromContext(h.ctx)
 		log.Printf("connected to Discord account %q", tag)
 	})
+
 	h.discord.AddHandler(func(closeEv *ws.CloseEvent) {
 		log := logger.FromContext(h.ctx)
 		log.Printf("disconnected from Discord account %q (code %d)", tag, closeEv.Code)
 	})
+
+	h.discord.AddHandler(func(err error) {
+		log := logger.FromContext(h.ctx)
+		log.Printf("non-fatal error from Discord account %q: %v", tag, err)
+	})
+
+	h.discord.AddHandler(func(sessions *gateway.SessionsReplaceEvent) {
+		h.sessions.Lock()
+		h.sessions.sessions = []gateway.UserSession(*sessions)
+		h.sessions.Unlock()
+	})
+
+	// h.bindDebug()
+}
+
+func (h *accountHandler) bindDebug() {
+	ws.EnableRawEvents = true
+
+	os.MkdirAll("/tmp/twidiscord-events", os.ModePerm)
+
+	var serial uint64
+	h.discord.AddHandler(func(ev *ws.RawEvent) {
+		if ev.OriginalType != "SESSIONS_REPLACE" {
+			return
+		}
+
+		b, err := json.Marshal(ev)
+		if err != nil {
+			return
+		}
+
+		n := atomic.AddUint64(&serial, 1)
+		if err := os.WriteFile(fmt.Sprintf("/tmp/twidiscord-events/%s-%d.json", ev.OriginalType, n), b, os.ModePerm); err != nil {
+			return
+		}
+	})
+}
+
+// hasOtherSessions returns true if the current user has other sessions opened
+// right now.
+func (h *accountHandler) hasOtherSessions() bool {
+	h.sessions.Lock()
+	defer h.sessions.Unlock()
+
+	for _, session := range h.sessions.sessions {
+		// Ignore our session or idle sessions.
+		if session.SessionID == h.sessions.ourID || session.Status == discord.IdleStatus {
+			continue
+		}
+		return true
+	}
+
+	return false
 }
 
 func (h *accountHandler) onMessageCreate(ev *gateway.MessageCreateEvent) {
@@ -283,8 +367,8 @@ func (h *accountHandler) onMessage(msg *discord.Message, edited bool) {
 		return
 	}
 
-	// Check if we're muted.
-	if h.store.NumberIsMuted(h.ctx, h.TwilioNumber) {
+	// Check if we're muted or if we have any existing Discord sessions.
+	if h.hasOtherSessions() || h.store.NumberIsMuted(h.ctx, h.TwilioNumber) {
 		return
 	}
 
@@ -318,6 +402,8 @@ func (h *accountHandler) sendHelp(src twicli.Message) error {
 		"Discord, message <0> the first part (...)\n"+
 		"Discord, message <0> the final part\n"+
 		"Discord, message alieb Hello!\n"+
+		"Discord, mute\n"+
+		"Discord, unmute\n"+
 		"Discord, help",
 	)
 }
@@ -412,21 +498,21 @@ func (h *accountHandler) matchChReference(str string) (discord.ChannelID, error)
 		return chID, nil
 	}
 
-	dms, err := h.discord.PrivateChannels()
-	if err == nil {
-		if err := twicli.ValidatePattern(str); err != nil {
-			return 0, errors.Wrap(err, "invalid channel name")
-		}
-
-		ch := matchDM(dms, str)
-		if ch == nil {
-			return 0, errors.New("no such channel")
-		}
-
-		return ch.ID, nil
+	dms, err := h.discord.Cabinet.PrivateChannels()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to list private channels")
 	}
 
-	return 0, errors.New("unknown channel reference given")
+	if err := twicli.ValidatePattern(str); err != nil {
+		return 0, errors.Wrap(err, "invalid channel name")
+	}
+
+	ch := matchDM(dms, str)
+	if ch == nil {
+		return 0, errors.New("no such channel")
+	}
+
+	return ch.ID, nil
 }
 
 func matchDM(dms []discord.Channel, str string) *discord.Channel {
