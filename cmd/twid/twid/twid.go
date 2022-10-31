@@ -189,6 +189,24 @@ func (l *Loader) LoadConfig(b []byte, configType string) error {
 		l.enabled[name] = enabled.Enable
 	}
 
+	if l.enabled["twipi"] {
+		twipisrv, err := twipi.NewConfiguredServer(l.Config.Twipi)
+		if err != nil {
+			return errors.Wrap(err, "failed to create twipi server")
+		}
+
+		l.twipi = twipisrv
+
+		for name, handler := range l.handlers {
+			if !l.enabled[name] {
+				continue
+			}
+			if twipiHandler, ok := handler.(TwipiHandler); ok {
+				twipiHandler.BindTwipi(twipisrv)
+			}
+		}
+	}
+
 	if l.Config.Twid.HTTP.ListenAddr != "" {
 		l.mux = chi.NewMux()
 		l.http = &http.Server{
@@ -207,23 +225,9 @@ func (l *Loader) LoadConfig(b []byte, configType string) error {
 		}
 	}
 
-	if l.enabled["twipi"] {
-		twipisrv, err := twipi.NewConfiguredServer(l.Config.Twipi)
-		if err != nil {
-			return errors.Wrap(err, "failed to create twipi server")
-		}
-
-		l.twipi = twipisrv
-		l.mux.Mount("/", twipisrv)
-
-		for name, handler := range l.handlers {
-			if !l.enabled[name] {
-				continue
-			}
-			if twipiHandler, ok := handler.(TwipiHandler); ok {
-				twipiHandler.BindTwipi(twipisrv)
-			}
-		}
+	// Bind the twipi router last.
+	if l.twipi != nil {
+		l.mux.Mount("/", l.twipi)
 	}
 
 	return nil
