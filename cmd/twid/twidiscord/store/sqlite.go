@@ -166,6 +166,24 @@ func (s *SQLite) SetAccount(ctx context.Context, info twidiscord.Account) error 
 	return sqliteErr(err)
 }
 
+func (s *SQLite) NumberIsMuted(ctx context.Context, userNumber twipi.PhoneNumber) bool {
+	v, _ := s.q.NumberIsMuted(ctx, string(userNumber))
+	return v != 0
+}
+
+func (s *SQLite) SetNumberMuted(ctx context.Context, userNumber twipi.PhoneNumber, muted bool) error {
+	var mutedInt64 int64
+	if muted {
+		mutedInt64 = 1
+	}
+
+	err := s.q.SetNumberMuted(ctx, sqlite.SetNumberMutedParams{
+		UserNumber: string(userNumber),
+		Muted:      mutedInt64,
+	})
+	return sqliteErr(err)
+}
+
 func sqliteErr(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return twidiscord.ErrNotFound

@@ -19,6 +19,8 @@ type Store struct {
 type Storer interface {
 	SecretStorer
 	ChannelStorer
+	NumberIsMuted(context.Context, twipi.PhoneNumber) bool
+	SetNumberMuted(context.Context, twipi.PhoneNumber, bool) error
 }
 
 type SecretStorer interface {

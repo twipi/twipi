@@ -91,6 +91,17 @@ func (q *Queries) NewChannelSerial(ctx context.Context, arg NewChannelSerialPara
 	return err
 }
 
+const numberIsMuted = `-- name: NumberIsMuted :one
+SELECT muted FROM numbers_muted WHERE user_number = ? LIMIT 1
+`
+
+func (q *Queries) NumberIsMuted(ctx context.Context, userNumber string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, numberIsMuted, userNumber)
+	var muted int64
+	err := row.Scan(&muted)
+	return muted, err
+}
+
 const serialToChannel = `-- name: SerialToChannel :one
 SELECT channel_id FROM channel_serials WHERE user_id = ? AND serial = ? LIMIT 1
 `
@@ -119,5 +130,19 @@ type SetAccountParams struct {
 
 func (q *Queries) SetAccount(ctx context.Context, arg SetAccountParams) error {
 	_, err := q.db.ExecContext(ctx, setAccount, arg.UserNumber, arg.TwilioNumber, arg.DiscordToken)
+	return err
+}
+
+const setNumberMuted = `-- name: SetNumberMuted :exec
+REPLACE INTO numbers_muted (user_number, muted) VALUES (?, ?)
+`
+
+type SetNumberMutedParams struct {
+	UserNumber string
+	Muted      int64
+}
+
+func (q *Queries) SetNumberMuted(ctx context.Context, arg SetNumberMutedParams) error {
+	_, err := q.db.ExecContext(ctx, setNumberMuted, arg.UserNumber, arg.Muted)
 	return err
 }

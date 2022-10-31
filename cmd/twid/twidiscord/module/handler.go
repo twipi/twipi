@@ -132,6 +132,14 @@ func (h *Handler) Command() twicli.Command {
 				Action: h.accountDispatcher((*accountHandler).sendMessage),
 			},
 			{
+				Prefix: twicli.NewWordPrefix("mute", true),
+				Action: h.accountDispatcher((*accountHandler).sendMute),
+			},
+			{
+				Prefix: twicli.NewWordPrefix("unmute", true),
+				Action: h.accountDispatcher((*accountHandler).sendUnmute),
+			},
+			{
 				Prefix: twicli.NewWordPrefix("help", true),
 				Action: h.accountDispatcher((*accountHandler).sendHelp),
 			},
@@ -275,6 +283,11 @@ func (h *accountHandler) onMessage(msg *discord.Message, edited bool) {
 		return
 	}
 
+	// Check if we're muted.
+	if h.store.NumberIsMuted(h.ctx, h.TwilioNumber) {
+		return
+	}
+
 	serial, err := h.store.ChannelToSerial(h.ctx, me.ID, msg.ChannelID)
 	if err != nil {
 		log := logger.FromContext(h.ctx)
@@ -307,6 +320,24 @@ func (h *accountHandler) sendHelp(src twicli.Message) error {
 		"Discord, message alieb Hello!\n"+
 		"Discord, help",
 	)
+}
+
+func (h *accountHandler) sendMute(src twicli.Message) error {
+	if err := h.store.SetNumberMuted(h.ctx, h.TwilioNumber, true); err != nil {
+		return err
+	}
+
+	return h.twipi.Client.ReplySMS(h.ctx, src.Message,
+		"Muted. No more messages will be sent from Discord.")
+}
+
+func (h *accountHandler) sendUnmute(src twicli.Message) error {
+	if err := h.store.SetNumberMuted(h.ctx, h.TwilioNumber, false); err != nil {
+		return err
+	}
+
+	return h.twipi.Client.ReplySMS(h.ctx, src.Message,
+		"Unmuted. You will receive messages again.")
 }
 
 var (

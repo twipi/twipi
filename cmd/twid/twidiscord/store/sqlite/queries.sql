@@ -23,3 +23,9 @@ SELECT twilio_number, discord_token FROM accounts WHERE user_number = ? LIMIT 1;
 
 -- name: Accounts :many
 SELECT user_number, twilio_number, discord_token FROM accounts;
+
+-- name: NumberIsMuted :one
+SELECT muted FROM numbers_muted WHERE user_number = ? LIMIT 1;
+
+-- name: SetNumberMuted :exec
+REPLACE INTO numbers_muted (user_number, muted) VALUES (?, ?);
