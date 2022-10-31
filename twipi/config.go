@@ -10,7 +10,6 @@ import (
 // TOML.
 type Config struct {
 	Twipi struct {
-		ListenAddr string `toml:"listen_addr" json:"listen_addr"`
 		// Secrets is the secret section of Config. It contains sensitive
 		// information such as the Twilio account SID and auth token. It is
 		// strongly discouraged to store this information in a regular config
@@ -33,7 +32,7 @@ type Config struct {
 // ConfiguredServer contains servers initialized from a Config. Handlers that
 // are disabled will be nil. The WebhookServer will always be non-nil.
 type ConfiguredServer struct {
-	*WebhookServer
+	*WebhookRouter
 	Client  *Client // API client
 	Message *MessageHandler
 }
@@ -41,8 +40,8 @@ type ConfiguredServer struct {
 // NewConfiguredServer creates a new ConfiguredServer from a Config.
 func NewConfiguredServer(c Config) (*ConfiguredServer, error) {
 	var (
-		accountSID = c.Twipi.Secrets.AccountSID.String()
-		authToken  = c.Twipi.Secrets.AuthToken.String()
+		accountSID = c.Twipi.Secrets.AccountSID.Value()
+		authToken  = c.Twipi.Secrets.AuthToken.Value()
 	)
 
 	if accountSID == "" {
@@ -55,7 +54,7 @@ func NewConfiguredServer(c Config) (*ConfiguredServer, error) {
 
 	twipic := c.Twipi
 	s := ConfiguredServer{
-		WebhookServer: NewWebhookServer(twipic.ListenAddr),
+		WebhookRouter: NewWebhookRouter(),
 		Client:        NewClient(accountSID, authToken),
 	}
 

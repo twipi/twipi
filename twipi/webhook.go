@@ -1,11 +1,8 @@
 package twipi
 
 import (
-	"context"
 	"io"
-	"net/http"
 
-	"github.com/diamondburned/listener"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -39,40 +36,4 @@ func (r *WebhookRouter) Close() error {
 		closer.Close()
 	}
 	return nil
-}
-
-// WebhookServer composes an HTTP server that handles various Twilio callbacks
-// and dispatches.
-type WebhookServer struct {
-	s *http.Server
-	r *WebhookRouter
-}
-
-// NewWebhookServer creates a new WebhookServer.
-func NewWebhookServer(listenAddr string) *WebhookServer {
-	r := NewWebhookRouter()
-	return &WebhookServer{
-		s: &http.Server{
-			Addr:    listenAddr,
-			Handler: r,
-		},
-		r: r,
-	}
-}
-
-// RegisterWebhook registers a webhook handler into the server.
-func (s *WebhookServer) RegisterWebhook(registerer WebhookRegisterer) {
-	s.r.RegisterWebhook(registerer)
-}
-
-// Close closes all the registered webhook registers.
-func (s *WebhookServer) Close() error {
-	return s.r.Close()
-}
-
-// ListenAndServe listens and serves the server.
-func (s *WebhookServer) ListenAndServe(ctx context.Context) error {
-	err := listener.HTTPListenAndServeCtx(ctx, s.s)
-	s.r.Close()
-	return err
 }
