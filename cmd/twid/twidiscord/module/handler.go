@@ -379,7 +379,7 @@ func (h *accountHandler) onMessage(msg *discord.Message, edited bool) {
 		return
 	}
 
-	body := fmt.Sprintf("<%d>%s: %s", serial, msg.Author.Username, msg.Content)
+	body := fmt.Sprintf("^%d %s: %s", serial, msg.Author.Username, msg.Content)
 	if edited {
 		body += " (edited)"
 	}
@@ -398,9 +398,9 @@ func (h *accountHandler) onMessage(msg *discord.Message, edited bool) {
 
 func (h *accountHandler) sendHelp(src twicli.Message) error {
 	return h.twipi.Client.ReplySMS(h.ctx, src.Message, "Usages:\n"+
-		"Discord, message <0> content\n"+
-		"Discord, message <0> the first part (...)\n"+
-		"Discord, message <0> the final part\n"+
+		"Discord, message ^0 content\n"+
+		"Discord, message ^0 the first part (...)\n"+
+		"Discord, message ^0 the final part\n"+
 		"Discord, message alieb Hello!\n"+
 		"Discord, mute\n"+
 		"Discord, unmute\n"+
@@ -427,7 +427,7 @@ func (h *accountHandler) sendUnmute(src twicli.Message) error {
 }
 
 var (
-	tagSerialRe = regexp.MustCompile(`<(\d+)>`)
+	tagSerialRe = regexp.MustCompile(`^\^(\d+)$`)
 	// tagChIDRe   = regexp.MustCompile(`<#(\d+)>`)
 	// tagUserIDRe = regexp.MustCompile(`<@!?(\d+)>`)
 )
