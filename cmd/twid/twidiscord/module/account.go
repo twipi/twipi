@@ -277,7 +277,7 @@ func (h *accountHandler) sendMessageIDs(chID discord.ChannelID, ids []discord.Me
 	// Iterate from earliest.
 	for i := len(filtered) - 1; i >= 0; i-- {
 		msg := &filtered[i]
-		body.WriteString(msg.Content)
+		body.WriteString(renderText(h.ctx, h.discord, msg.Content, msg))
 
 		if len(msg.Embeds) > 0 {
 			if len(msg.Embeds) == 1 {
@@ -301,7 +301,7 @@ func (h *accountHandler) sendMessageIDs(chID discord.ChannelID, ids []discord.Me
 	err = h.twipi.Client.SendSMS(h.ctx, twipi.Message{
 		From: h.TwilioNumber,
 		To:   h.UserNumber,
-		Body: body.String(),
+		Body: strings.TrimSuffix(body.String(), "\n"),
 	})
 	if err != nil {
 		log := logger.FromContext(h.ctx)
