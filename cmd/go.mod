@@ -1,4 +1,4 @@
-module github.com/diamondburned/twikit/cmd/twid
+module github.com/diamondburned/twikit/cmd
 
 go 1.19
 
@@ -9,33 +9,20 @@ require (
 	github.com/diamondburned/tmplutil v0.0.0-20220124221250-5dbe568d9e70
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/pkg/errors v0.9.1
+	github.com/yuin/goldmark v1.3.5
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	modernc.org/sqlite v1.19.3
 )
 
 require (
-	github.com/1pkg/gohalt v0.9.0 // indirect
-	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
-	github.com/go-ole/go-ole v1.2.4 // indirect
-	github.com/golang/snappy v0.0.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
-	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/klauspost/compress v1.11.0 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.1 // indirect
-	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
-	github.com/prometheus/client_golang v1.7.1 // indirect
-	github.com/prometheus/common v0.14.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
-	github.com/satori/go.uuid v1.2.0 // indirect
-	github.com/segmentio/kafka-go v0.4.2 // indirect
-	github.com/shirou/gopsutil v2.20.8+incompatible // indirect
-	github.com/streadway/amqp v1.0.0 // indirect
 	github.com/twmb/murmur3 v1.1.3 // indirect
+	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/sys v0.0.0-20221010170243-090e33056c14 // indirect
 	golang.org/x/time v0.1.0 // indirect

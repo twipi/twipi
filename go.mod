@@ -3,7 +3,6 @@ module github.com/diamondburned/twikit
 go 1.18
 
 require (
-	github.com/diamondburned/listener v0.0.0-20220315064222-63f8ebce5f60
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/pelletier/go-toml/v2 v2.0.5
 	github.com/pkg/errors v0.9.1
