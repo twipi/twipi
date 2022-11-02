@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
@@ -87,3 +88,23 @@ func (env Env[T]) Value() T {
 
 // EnvString is a string variant of Env.
 type EnvString = Env[string]
+
+// Duration is a type that describes a duration in a config.
+type Duration time.Duration
+
+func (d *Duration) UnmarshalText(b []byte) error {
+	v, err := time.ParseDuration(string(b))
+	if err != nil {
+		return err
+	}
+	*d = Duration(v)
+	return nil
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var v string
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	return d.UnmarshalText([]byte(v))
+}
