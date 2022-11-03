@@ -353,7 +353,7 @@ func (h *accountHandler) sendSummarize(src twicli.Message) error {
 
 	type unreadChannel struct {
 		discord.Channel
-		MentionCount int
+		UnreadCount int
 	}
 
 	var unreads []unreadChannel
@@ -363,19 +363,12 @@ func (h *accountHandler) sendSummarize(src twicli.Message) error {
 			continue
 		}
 
-		readState := h.discord.ReadState.ReadState(dm.ID)
-		if readState == nil || !readState.LastMessageID.IsValid() {
-			continue
+		if count := h.discord.ChannelCountUnreads(dm.ID); count > 0 {
+			unreads = append(unreads, unreadChannel{
+				Channel:     dm,
+				UnreadCount: count,
+			})
 		}
-
-		if readState.MentionCount == 0 {
-			continue
-		}
-
-		unreads = append(unreads, unreadChannel{
-			Channel:      dm,
-			MentionCount: readState.MentionCount,
-		})
 	}
 
 	if len(unreads) == 0 {
@@ -385,7 +378,7 @@ func (h *accountHandler) sendSummarize(src twicli.Message) error {
 	var buf strings.Builder
 	fmt.Fprintf(&buf, "You have %d unread channels:\n", len(unreads))
 	for _, unread := range unreads {
-		fmt.Fprintf(&buf, "%s: %d\n", chName(unread.Channel), unread.MentionCount)
+		fmt.Fprintf(&buf, "%s (%d)\n", chName(unread.Channel), unread.UnreadCount)
 	}
 
 	return h.twipi.Client.ReplySMS(h.ctx, src.Message, buf.String())
