@@ -3,9 +3,9 @@ module github.com/diamondburned/twikit/cmd
 go 1.19
 
 require (
-	github.com/diamondburned/arikawa/v3 v3.1.1-0.20221031113421-60ed12f3c05e
+	github.com/diamondburned/arikawa/v3 v3.1.1-0.20221103093025-87c479a2dcd4
 	github.com/diamondburned/listener v0.0.0-20220315064222-63f8ebce5f60
-	github.com/diamondburned/ningen/v3 v3.0.0-20221103085437-5674a309526f
+	github.com/diamondburned/ningen/v3 v3.0.0-20221103090733-7a4a28dc3043
 	github.com/diamondburned/tmplutil v0.0.0-20220124221250-5dbe568d9e70
 	github.com/diamondburned/twikit v0.0.0-20221102212644-34c4963feb29
 	github.com/go-chi/chi/v5 v5.0.7

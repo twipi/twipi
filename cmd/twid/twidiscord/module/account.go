@@ -80,6 +80,8 @@ func newAccountHandler(twipisrv *twipi.ConfiguredServer, account twidiscord.Acco
 		ctx:       context.Background(),
 	}
 
+	h.bind()
+
 	h.messageThrottlers = *newMessageThrottlers(messageThrottleConfig{
 		max: 15,
 		do:  h.sendMessageIDs,
@@ -133,14 +135,11 @@ func (h *accountHandler) bind() {
 func (h *accountHandler) bindDebug() {
 	ws.EnableRawEvents = true
 
+	os.RemoveAll("/tmp/twidiscord-events")
 	os.MkdirAll("/tmp/twidiscord-events", os.ModePerm)
 
 	var serial uint64
 	h.discord.AddHandler(func(ev *ws.RawEvent) {
-		if ev.OriginalType != "SESSIONS_REPLACE" {
-			return
-		}
-
 		b, err := json.Marshal(ev)
 		if err != nil {
 			return

@@ -85,7 +85,6 @@ func (h *Handler) startAccount(ah *accountHandler) {
 		ah.ctx = h.ctx
 		ah.ctx = logger.WithLogPrefix(ah.ctx, "discord: "+string(ah.UserNumber))
 		ah.discord = ah.discord.WithContext(ah.ctx)
-		ah.bind()
 
 		if err := ah.discord.Connect(ah.ctx); err != nil {
 			log := logger.FromContext(ah.ctx)
