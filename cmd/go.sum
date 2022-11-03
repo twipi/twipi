@@ -39,6 +39,8 @@ github.com/diamondburned/ningen/v3 v3.0.0-20221103072710-cb037fc43e5b h1:XMP6EhC
 github.com/diamondburned/ningen/v3 v3.0.0-20221103072710-cb037fc43e5b/go.mod h1:zw/rSJY4S/Bw7Ctfh/6IDf0hPPySOJYMGNoRICaU6G8=
 github.com/diamondburned/ningen/v3 v3.0.0-20221103080151-60cdb3e81ef4 h1:E48qYVxAQ9IUwyyDxYCeBqeYn9YynGX3ULTFGn7xBr4=
 github.com/diamondburned/ningen/v3 v3.0.0-20221103080151-60cdb3e81ef4/go.mod h1:zw/rSJY4S/Bw7Ctfh/6IDf0hPPySOJYMGNoRICaU6G8=
+github.com/diamondburned/ningen/v3 v3.0.0-20221103085437-5674a309526f h1:CRnieCWOFAxXeev/A9R+zf0/uYa2M6zVbMNpV6xJzhs=
+github.com/diamondburned/ningen/v3 v3.0.0-20221103085437-5674a309526f/go.mod h1:zw/rSJY4S/Bw7Ctfh/6IDf0hPPySOJYMGNoRICaU6G8=
 github.com/diamondburned/tmplutil v0.0.0-20220124221250-5dbe568d9e70 h1:I2It/Pbts1xbG64GpJc81VccBpNPUElovz8Zddko0fk=
 github.com/diamondburned/tmplutil v0.0.0-20220124221250-5dbe568d9e70/go.mod h1:FBAqurv13gfYH+o5XicjpFgmFPXiqWh52nWY8k5XNt0=
 github.com/diamondburned/twikit v0.0.0-20221102212644-34c4963feb29 h1:Lb7b+ndDuMJOzzGXwVSSgxdj2LEmSObfPo17e/BxBZY=
