@@ -57,12 +57,13 @@ func (t *messageThrottler) AddMessage(id discord.MessageID, delayDuration time.D
 	var overflow []discord.MessageID
 
 	t.queueMu.Lock()
-	t.queue = append(t.queue, id)
 	// Check for overflowing queue. If we overflow, then we'll send them off
 	// right away.
-	if len(t.queue) > t.config.max {
+	if len(t.queue) >= t.config.max {
 		overflow = t.queue
 		t.queue = []discord.MessageID{id}
+	} else {
+		t.queue = append(t.queue, id)
 	}
 	t.queueMu.Unlock()
 
@@ -92,21 +93,21 @@ func (t *messageThrottler) tryStartJob(delay time.Duration) {
 	t.timer.Lock()
 	defer t.timer.Unlock()
 
-	if t.timer.reset != nil {
-		// Already started. Just send the delay over. We'll just try and send
-		// the duration, however if that doesn't immediately work, we'll just
-		// spawn a new goroutine to do our job.
-		select {
-		case t.timer.reset <- delay:
-			return
-		default:
-			// If this case ever hits, then the worker is probably waiting for
-			// the mutex to unlock. We should be able to just spawn a new
-			// goroutine with the current delay.
-		}
+	if t.timer.reset == nil {
+		t.timer.reset = make(chan time.Duration, 1)
 	}
 
-	t.timer.reset = make(chan time.Duration, 1)
+	// Already started. Just send the delay over. We'll just try and send
+	// the duration, however if that doesn't immediately work, we'll just
+	// spawn a new goroutine to do our job.
+	select {
+	case t.timer.reset <- delay:
+		return
+	case <-t.timer.reset:
+		// If this case ever hits, then the worker is probably waiting for
+		// the mutex to unlock. We should be able to just spawn a new
+		// goroutine with the current delay.
+	}
 
 	go func() {
 		timer := time.NewTimer(delay)
@@ -119,12 +120,6 @@ func (t *messageThrottler) tryStartJob(delay time.Duration) {
 				timer.Reset(d)
 
 			case <-timer.C:
-				// Signal that we're done with waiting. Once this lock is
-				// released, a new goroutine will be able to start immediately.
-				t.timer.Lock()
-				t.timer.reset = nil
-				t.timer.Unlock()
-
 				// Steal the queue.
 				t.queueMu.Lock()
 				queue := t.queue

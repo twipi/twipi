@@ -16,7 +16,6 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
-	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/ws"
 	"github.com/diamondburned/ningen/v3"
 	"github.com/diamondburned/twikit/cmd/twid/twidiscord"
@@ -60,6 +59,7 @@ type accountHandler struct {
 
 func newAccountHandler(twipisrv *twipi.ConfiguredServer, account twidiscord.Account, cfg twidiscord.Config, store twidiscord.Storer) *accountHandler {
 	id := gateway.DefaultIdentifier(account.DiscordToken)
+	id.Capabilities = 253 // magic constant from reverse-engineering
 	id.Presence = &gateway.UpdatePresenceCommand{
 		Status: discord.IdleStatus,
 		AFK:    true,
@@ -73,7 +73,7 @@ func newAccountHandler(twipisrv *twipi.ConfiguredServer, account twidiscord.Acco
 	h := &accountHandler{
 		Account:   account,
 		twipi:     twipisrv,
-		discord:   ningen.FromState(state.NewWithIdentifier(id)),
+		discord:   ningen.NewWithIdentifier(id),
 		config:    cfg,
 		store:     store,
 		fragments: make(map[string]messageFragment),
