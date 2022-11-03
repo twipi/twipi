@@ -35,8 +35,8 @@ github.com/diamondburned/arikawa/v3 v3.1.1-0.20221031113421-60ed12f3c05e h1:i64S
 github.com/diamondburned/arikawa/v3 v3.1.1-0.20221031113421-60ed12f3c05e/go.mod h1:5jBSNnp82Z/EhsKa6Wk9FsOqSxfVkNZDTDBPOj47LpY=
 github.com/diamondburned/listener v0.0.0-20220315064222-63f8ebce5f60 h1:vCOrX103hH7wrTW2ArZDtowPZpp4lfGPulYOiMKWZYU=
 github.com/diamondburned/listener v0.0.0-20220315064222-63f8ebce5f60/go.mod h1:p3edGGNNb3kpayx5Klx2BSptqMmmEElX6BobXnkOZvU=
-github.com/diamondburned/ningen/v3 v3.0.0-20221031185600-38fff4d97ea0 h1:7j57oFv8nnmXoXut44iHhYSNYymKLmVQSw3LESIDrNs=
-github.com/diamondburned/ningen/v3 v3.0.0-20221031185600-38fff4d97ea0/go.mod h1:zw/rSJY4S/Bw7Ctfh/6IDf0hPPySOJYMGNoRICaU6G8=
+github.com/diamondburned/ningen/v3 v3.0.0-20221103072710-cb037fc43e5b h1:XMP6EhCtPI5CGko2170FdVSROcg22KURoSTZH0QtBGI=
+github.com/diamondburned/ningen/v3 v3.0.0-20221103072710-cb037fc43e5b/go.mod h1:zw/rSJY4S/Bw7Ctfh/6IDf0hPPySOJYMGNoRICaU6G8=
 github.com/diamondburned/tmplutil v0.0.0-20220124221250-5dbe568d9e70 h1:I2It/Pbts1xbG64GpJc81VccBpNPUElovz8Zddko0fk=
 github.com/diamondburned/tmplutil v0.0.0-20220124221250-5dbe568d9e70/go.mod h1:FBAqurv13gfYH+o5XicjpFgmFPXiqWh52nWY8k5XNt0=
 github.com/diamondburned/twikit v0.0.0-20221102212644-34c4963feb29 h1:Lb7b+ndDuMJOzzGXwVSSgxdj2LEmSObfPo17e/BxBZY=
