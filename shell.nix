@@ -15,4 +15,6 @@ in pkgs.mkShell {
 		gotools
 		sqlc
 	];
+
+	TWIDISCORD_DEBUG = "1";
 }

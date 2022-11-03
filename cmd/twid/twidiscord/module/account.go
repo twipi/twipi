@@ -129,7 +129,9 @@ func (h *accountHandler) bind() {
 		h.sessions.Unlock()
 	})
 
-	// h.bindDebug()
+	if os.Getenv("TWIDISCORD_DEBUG") != "" {
+		h.bindDebug()
+	}
 }
 
 func (h *accountHandler) bindDebug() {
