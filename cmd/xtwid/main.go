@@ -76,8 +76,8 @@ func generateMain(execer *execer) error {
 	b.WriteString("import (\n")
 	b.WriteString(strconv.Quote(path.Join(twikitModule, "twid")))
 	b.WriteString("\n")
-	for _, import_ := range extraImports {
-		b.WriteString("\t")
+	for _, import_ := range slices(extraImports, extraImportModules) {
+		b.WriteString("\t_ ")
 		b.WriteString(strconv.Quote(import_))
 		b.WriteString("\n")
 	}
@@ -118,14 +118,15 @@ func buildMain(execer *execer) error {
 func buildGoMod(execer *execer) error {
 	modName := "localhost" + filepath.ToSlash(execer.pwd)
 
-	var modules []string
-	modules = append(modules, twikitModule+"@"+twikitVersion)
-	modules = append(modules, extraModules...)
-	modules = append(modules, extraImportModules...)
-
 	if err := execer.exec("go", "mod", "init", modName); err != nil {
 		return errors.Wrap(err, "failed to initialize Go module")
 	}
+
+	modules := slices(
+		[]string{twikitModule + "@" + twikitVersion},
+		extraModules,
+		extraImportModules,
+	)
 
 	for _, module := range modules {
 		if err := execer.exec("go", "get", module); err != nil {
@@ -161,4 +162,18 @@ func (e *execer) exec(arg0 string, argv ...string) error {
 		cmd.Stderr = os.Stderr
 	}
 	return cmd.Run()
+}
+
+func slices[T any](slices ...[]T) []T {
+	var total int
+	for _, slice := range slices {
+		total += len(slice)
+	}
+
+	out := make([]T, 0, total)
+	for _, slice := range slices {
+		out = append(out, slice...)
+	}
+
+	return out
 }
