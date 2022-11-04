@@ -11,10 +11,10 @@ import (
 	"strings"
 
 	"github.com/diamondburned/listener"
-	"github.com/diamondburned/twikit/utils/cfgutil"
 	"github.com/diamondburned/twikit/logger"
 	"github.com/diamondburned/twikit/twicli"
 	"github.com/diamondburned/twikit/twipi"
+	"github.com/diamondburned/twikit/utils/cfgutil"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -84,6 +84,15 @@ type CommandHandler interface {
 	// Command returns the module's root command. Commands are checked against
 	// collisions.
 	Command() twicli.Command
+}
+
+// MessageHandler is a module that can handle a Twipi message. This is commonly
+// used as an alternative for CommandHandler.
+type MessageHandler interface {
+	Handler
+	// HandleMessage handles the given message. Each HandleMessage call is
+	// assumed to be in a separate goroutine.
+	HandleMessage(ctx context.Context, msg twipi.Message)
 }
 
 // HTTPCommander is a module that implements HTTP serving.
@@ -272,17 +281,42 @@ func (l *Loader) Start(ctx context.Context) error {
 		ctx := logger.WithLogPrefix(ctx, name)
 		handler := handler
 
-		errg.Go(func() error {
-			log := logger.FromContext(ctx)
-			log.Println("starting module")
-			defer log.Println("module stopped")
+		if messager, ok := handler.(MessageHandler); ok {
+			if l.twipi == nil {
+				return errors.New("twipi is not configured")
+			}
 
-			return handler.Start(ctx)
-		})
+			if l.twipi.Message == nil {
+				return errors.New("twipi message handler is not configured")
+			}
+
+			errg.Go(func() error {
+				ch := make(chan twipi.Message)
+
+				l.twipi.Message.SubscribeMessages("", ch)
+				defer l.twipi.Message.UnsubscribeMessages(ch)
+
+				for {
+					select {
+					case <-ctx.Done():
+						return nil
+					case msg := <-ch:
+						errg.Go(func() error {
+							messager.HandleMessage(ctx, msg)
+							return nil
+						})
+					}
+				}
+			})
+		}
 
 		if commander, ok := handler.(CommandHandler); ok {
 			if l.twipi == nil {
 				return errors.New("twipi is not configured")
+			}
+
+			if l.twipi.Message == nil {
+				return errors.New("twipi message handler is not configured")
 			}
 
 			errg.Go(func() error {
@@ -291,6 +325,14 @@ func (l *Loader) Start(ctx context.Context) error {
 				return nil
 			})
 		}
+
+		errg.Go(func() error {
+			log := logger.FromContext(ctx)
+			log.Println("starting module")
+			defer log.Println("module stopped")
+
+			return handler.Start(ctx)
+		})
 	}
 
 	return errg.Wait()
