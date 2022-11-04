@@ -5,6 +5,8 @@ inspired from [xcaddy](https://github.com/caddyserver/xcaddy).
 
 ## Install
 
+You need the Go toolchain/compiler.
+
 ## Usage
 
 ```sh
