@@ -1,7 +1,7 @@
 # xtwid
 
 `xtwid` is a tool that builds a twid binary with external plug-in modules. It is
-inspired from [xcaddy](https://github.com/caddyserver/xcaddy).
+inspired by [xcaddy](https://github.com/caddyserver/xcaddy).
 
 ## Install
 
