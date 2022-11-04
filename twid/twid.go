@@ -1,3 +1,9 @@
+// package twid implements a server that can load and run multiple Twid modules.
+// These modules can form a complete Twid server that interacts with Twilio over
+// its REST and webhooks API.
+//
+// For examples on how to use this package, see
+// github.com/diamondburned/twidiscord.
 package twid
 
 import (
