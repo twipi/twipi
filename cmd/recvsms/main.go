@@ -12,9 +12,9 @@ import (
 	"sync"
 
 	"github.com/diamondburned/listener"
-	"github.com/diamondburned/twikit/cmd/twid/twid"
-	"github.com/diamondburned/twikit/utils/cfgutil"
+	"github.com/diamondburned/twikit/twid"
 	"github.com/diamondburned/twikit/twipi"
+	"github.com/diamondburned/twikit/utils/cfgutil"
 	"github.com/pkg/errors"
 )
 
