@@ -128,22 +128,9 @@ func Subcommands(cmds []Command) ActionFunc {
 	}
 }
 
-// Do runs the command. ErrNotMatched is returned if the command does not match
-// the given message.
-func (c *Command) Do(ctx context.Context, msg Message) error {
-	if body, ok := c.Prefix(msg.Body); ok {
-		msg.Body = body
-		return c.Action(ctx, msg)
-	}
-	return ErrNotMatched
-}
-
 // Loop starts an event loop for the given MessageHandler that spins and
 // dispatches command actions. Actions will be dispatched in goroutines.
 func (c *Command) Loop(ctx context.Context, h *twipi.MessageHandler, cli *twipi.Client) {
-	log := logger.FromContext(ctx)
-	log = log.WithPrefix("twicli")
-
 	ch := make(chan twipi.Message)
 
 	var wg sync.WaitGroup
@@ -159,22 +146,44 @@ func (c *Command) Loop(ctx context.Context, h *twipi.MessageHandler, cli *twipi.
 		case msg := <-ch:
 			wg.Add(1)
 			go func() {
-				defer wg.Done()
-
-				reply := func(body string) {
-					if err := cli.ReplySMS(ctx, msg, body); err != nil {
-						log.Printf("%s replying to %s: cannot send SMS: %v", msg.From, msg.To, err)
-					}
-				}
-
-				if err := c.Do(ctx, Message{msg, msg.Body}); err != nil {
-					if errors.Is(err, ErrNotMatched) {
-						reply("Sorry! I'm not sure what you mean.")
-					} else {
-						reply("Sorry, an error occured: " + err.Error())
-					}
-				}
+				c.DoAndReply(ctx, cli, msg)
+				wg.Done()
 			}()
 		}
+	}
+}
+
+// Do runs the command. ErrNotMatched is returned if the command does not match
+// the given message.
+func (c *Command) Do(ctx context.Context, msg Message) error {
+	if body, ok := c.Prefix(msg.Body); ok {
+		msg.Body = body
+		return c.Action(ctx, msg)
+	}
+	return ErrNotMatched
+}
+
+// DoAndReply runs the command and replies to the given message with the
+// returned error. If the error is nil, no reply is sent.
+func (c *Command) DoAndReply(ctx context.Context, cli *twipi.Client, msg twipi.Message) {
+	if err := c.Do(ctx, Message{msg, msg.Body}); err != nil {
+		errBody := ErrorMessage(err)
+		if err := cli.ReplySMS(ctx, msg, errBody); err != nil {
+			log := logger.FromContext(ctx, "twicli")
+			log.Printf("%s replying to %s: cannot send SMS: %v", msg.From, msg.To, err)
+		}
+	}
+}
+
+// ErrorMessage is a helper function that returns a new message body from the
+// given error.
+func ErrorMessage(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, ErrNotMatched):
+		return "Sorry! I'm not sure what you mean."
+	default:
+		return "Sorry, an error occured: " + err.Error()
 	}
 }
