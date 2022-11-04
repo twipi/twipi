@@ -95,7 +95,7 @@ func generateMain(execer *execer) error {
 
 func buildMain(execer *execer) error {
 	dst := output
-	if !debug && !filepath.IsAbs(dst) {
+	if !filepath.IsAbs(dst) {
 		pwd, err := os.Getwd()
 		if err != nil {
 			return errors.Wrap(err, "failed to get current working directory")
