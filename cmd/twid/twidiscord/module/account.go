@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"runtime"
@@ -489,9 +490,23 @@ func chName(ch discord.Channel) string {
 		return ch.Name
 	}
 
-	if len(ch.DMRecipients) == 1 {
-		return ch.DMRecipients[0].Username
-	}
+	log.Printf("seeing channel %#v", ch)
 
-	return ""
+	switch len(ch.DMRecipients) {
+	case 0:
+		return ch.ID.Mention()
+	case 1:
+		return ch.DMRecipients[0].Username
+	default:
+		var buf string
+		for i := 0; i < len(ch.DMRecipients) && i < 3; i++ {
+			buf += ch.DMRecipients[i].Username + ", "
+		}
+		if len(ch.DMRecipients) > 3 {
+			buf += "..."
+		} else {
+			buf = strings.TrimSuffix(buf, ", ")
+		}
+		return buf
+	}
 }

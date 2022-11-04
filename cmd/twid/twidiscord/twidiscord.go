@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/diamondburned/twikit/internal/cfgutil"
+	"github.com/diamondburned/twikit/utils/cfgutil"
 	"github.com/diamondburned/twikit/twipi"
 	"github.com/pkg/errors"
 )

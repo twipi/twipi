@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/listener"
-	"github.com/diamondburned/twikit/internal/cfgutil"
+	"github.com/diamondburned/twikit/utils/cfgutil"
 	"github.com/diamondburned/twikit/logger"
 	"github.com/diamondburned/twikit/twicli"
 	"github.com/diamondburned/twikit/twipi"

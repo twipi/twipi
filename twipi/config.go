@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/diamondburned/twikit/internal/cfgutil"
+	"github.com/diamondburned/twikit/utils/cfgutil"
 	"github.com/diamondburned/twikit/logger"
 	"github.com/pkg/errors"
 

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/diamondburned/twikit/internal/pubsub"
-	"github.com/diamondburned/twikit/internal/srvutil"
+	"github.com/diamondburned/twikit/utils/pubsub"
+	"github.com/diamondburned/twikit/utils/srvutil"
 	"github.com/diamondburned/twikit/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
