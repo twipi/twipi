@@ -285,6 +285,7 @@ func (l *Loader) Start(ctx context.Context) error {
 		}
 
 		ctx := logger.WithLogPrefix(ctx, name)
+		name := name
 		handler := handler
 
 		if messager, ok := handler.(MessageHandler); ok {
@@ -337,7 +338,11 @@ func (l *Loader) Start(ctx context.Context) error {
 			log.Println("starting module")
 			defer log.Println("module stopped")
 
-			return handler.Start(ctx)
+			if err := handler.Start(ctx); err != nil {
+				return errors.Wrapf(err, "failed to start module %q", name)
+			}
+
+			return nil
 		})
 	}
 
