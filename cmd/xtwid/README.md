@@ -11,9 +11,9 @@ You need the Go toolchain/compiler.
 
 ```sh
 # Print help
-go run github.com/diamondburned/twikit/cmd/xtwid -h
+go run github.com/diamondburned/twikit/cmd/xtwid@latest -h
 
 # Install with twidiscord. Multiple import-module flags can be stated.
-go run github.com/diamondburned/twikit/cmd/xtwid \
+go run github.com/diamondburned/twikit/cmd/xtwid@latest \
 	-import-module github.com/diamondburned/twidiscord
 ```
