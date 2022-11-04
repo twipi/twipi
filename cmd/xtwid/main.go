@@ -44,7 +44,7 @@ func main() {
 }
 
 func build() error {
-	dir, err := os.MkdirTemp("", "twidx-*")
+	dir, err := os.MkdirTemp("", "xtwid-*")
 	if err != nil {
 		return errors.Wrap(err, "failed to create temporary directory")
 	}
@@ -128,15 +128,15 @@ func buildGoMod(execer *execer) error {
 		extraImportModules,
 	)
 
-	for _, module := range modules {
-		if err := execer.exec("go", "get", module); err != nil {
-			return errors.Wrapf(err, "failed to get module %q", module)
-		}
-	}
-
 	for _, replace := range extraReplaces {
 		if err := execer.exec("go", "mod", "edit", "-replace="+replace); err != nil {
 			return errors.Wrapf(err, "failed to replace module %q", replace)
+		}
+	}
+
+	for _, module := range modules {
+		if err := execer.exec("go", "get", module); err != nil {
+			return errors.Wrapf(err, "failed to get module %q", module)
 		}
 	}
 
