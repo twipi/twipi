@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -235,7 +236,7 @@ func (l *Loader) LoadConfig(b []byte, configType string) error {
 			}
 
 			if httpHandler, ok := handler.(HTTPCommander); ok {
-				l.mux.Mount(httpHandler.HTTPPrefix(), httpHandler.HTTPHandler())
+				l.mux.Handle(path.Join(httpHandler.HTTPPrefix(), "*"), httpHandler.HTTPHandler())
 			}
 		}
 	}
