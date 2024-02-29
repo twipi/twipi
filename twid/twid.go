@@ -10,6 +10,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,7 +22,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/twipi/twikit/internal/cfgutil"
-	"github.com/twipi/twikit/internal/slogctx"
 	"github.com/twipi/twikit/twicli"
 	"github.com/twipi/twikit/twipi"
 	"golang.org/x/sync/errgroup"
@@ -257,7 +257,7 @@ func (l *Loader) Start(ctx context.Context) error {
 		return errors.New("twid is not enabled") // lol ??
 	}
 
-	logger := slogctx.From(ctx)
+	logger := ctxt.FromOrFunc(ctx, slog.Default)
 	errg, ctx := errgroup.WithContext(ctx)
 
 	if l.twipi != nil {

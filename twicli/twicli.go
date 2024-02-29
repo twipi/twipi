@@ -6,11 +6,12 @@ package twicli
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/twipi/twikit/internal/slogctx"
 	"github.com/twipi/twikit/twipi"
+	"libdb.so/ctxt"
 )
 
 // Message is a Twilio message. It wraps the orignal Twipi message to add a
@@ -92,7 +93,7 @@ func (c *Command) DoAndReply(ctx context.Context, cli *twipi.Client, msg twipi.M
 	if err := c.Do(ctx, Message{msg, msg.Body}); err != nil {
 		errBody := ErrorMessage(err)
 		if err := cli.ReplySMS(ctx, msg, errBody); err != nil {
-			logger := slogctx.From(ctx)
+			logger := ctxt.FromOrFunc(ctx, slog.Default)
 			logger.ErrorContext(ctx,
 				"cannot reply with error message",
 				"do_err", err,

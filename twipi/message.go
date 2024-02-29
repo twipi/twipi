@@ -10,8 +10,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/twilio/twilio-go/twiml"
 	"github.com/twipi/twikit/internal/pubsub"
-	"github.com/twipi/twikit/internal/slogctx"
 	"github.com/twipi/twikit/internal/srvutil"
+	"libdb.so/ctxt"
 )
 
 // PhoneNumber is a phone number.
@@ -172,7 +172,7 @@ func (l *MessageHandler) handleIncoming(w http.ResponseWriter, r *http.Request) 
 
 	xml, err := messageToTwiML(reply)
 	if err != nil {
-		logger := slogctx.From(r.Context())
+		logger := ctxt.FromOrFunc(r.Context(), slog.Default)
 		logger.ErrorContext(r.Context(),
 			"failed to encode reply TwiML, dropping request", l.group,
 			"err", err)

@@ -9,7 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/twipi/twikit/internal/cfgutil"
-	"github.com/twipi/twikit/internal/slogctx"
+	"libdb.so/ctxt"
 
 	twilioapi "github.com/twilio/twilio-go/rest/api/v2010"
 	twiliomessaging "github.com/twilio/twilio-go/rest/messaging/v1"
@@ -109,7 +109,7 @@ func NewConfiguredServerFromPath(path string) (*ConfiguredServer, error) {
 func (c *ConfiguredServer) UpdateTwilio(ctx context.Context) {
 	for _, account := range c.Config.Accounts {
 		client := c.Client.FromPhone(account.PhoneNumber.Value())
-		logger := slogctx.From(ctx).With(
+		logger := ctxt.FromOrFunc(ctx, slog.Default).With(
 			"account.account_sid", account.AccountSID,
 			"account.phone_number", account.PhoneNumber.String(),
 		)
