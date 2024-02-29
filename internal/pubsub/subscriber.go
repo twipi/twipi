@@ -62,13 +62,18 @@ func (s *Subscriber[T]) publish(value T) {
 	}
 }
 
+// FilterFunc is a filter function for any type.
+// If the function returns true, the message will be sent to the subscriber.
+// If the function is nil, all messages will be sent to the subscriber.
+type FilterFunc[T any] func(T) bool
+
 // Subscribe subscribes ch to incoming messages from the given recipient.
 // Calls to Subscribe should always be paired with Unsubscribe. It is
 // recommended to use defer.
 //
 // Subscribe panics if it's called on a Subscriber w/ a src that's already
 // closed.
-func (s *Subscriber[T]) Subscribe(ch chan<- T, filter func(T) bool) {
+func (s *Subscriber[T]) Subscribe(ch chan<- T, filter FilterFunc[T]) {
 	if filter == nil {
 		filter = func(T) bool { return true }
 	}
