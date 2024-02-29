@@ -3,7 +3,7 @@ package pubsub
 import (
 	"sync"
 
-	"github.com/twipi/twikit/internal/containerx"
+	"github.com/twipi/twipi/internal/containerx"
 )
 
 // Subscriber is a subscriber that subscribes to a Pipe. A zero-value Subscriber

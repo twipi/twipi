@@ -1,21 +1,10 @@
-# twikit
+# twipi
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/diamondburned/twikit.svg)](https://pkg.go.dev/github.com/diamondburned/twikit)
-[![Go Documentation](https://godocs.io/github.com/diamondburned/twikit?status.svg)](https://godocs.io/github.com/diamondburned/twikit)
+[Package twipi][doc] contains basic abstractions around some Twilio APIs. It's
+designed to easily allow Twilio to be used in a Go application by providing
+high-level abstractions around the API.
 
-twikit is a Twilio SMS framework that allows building messaging daemons easily
-in Go.
- 
-twikit contains twipi, twicli, twid and [xtwid](./cmd/xtwid). For documentation
-on what those do and how to use them, refer to the package documentation linked
-above.
+If you're making a Twilio application that can handle replying to commands,
+also consider using the ~~twicli package~~.
 
-## twid showcase
-
-This section lists notable twid modules. If there are any more modules that you
-think are notable, please open a pull request.
-
-To see how to install twid modules, see [xtwid](./cmd/xtwid).
-
-- [twidiscord](https://github.com/diamondburned/twidiscord): A Discord<->SMS
-  bridge.
+[doc]: https://pkg.go.dev/github.com/twipi/twipi

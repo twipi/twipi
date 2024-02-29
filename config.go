@@ -8,7 +8,7 @@ import (
 	"slices"
 
 	"github.com/pkg/errors"
-	"github.com/twipi/twikit/internal/cfgutil"
+	"github.com/twipi/cfgutil"
 	"libdb.so/ctxt"
 
 	twilioapi "github.com/twilio/twilio-go/rest/api/v2010"

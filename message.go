@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/twilio/twilio-go/twiml"
-	"github.com/twipi/twikit/internal/pubsub"
-	"github.com/twipi/twikit/internal/srvutil"
+	"github.com/twipi/twipi/internal/pubsub"
+	"github.com/twipi/twipi/internal/srvutil"
 	"libdb.so/ctxt"
 )
 
