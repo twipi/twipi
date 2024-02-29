@@ -15,7 +15,7 @@ import (
 
 var (
 	twikitVersion      = "latest"
-	twikitModule       = "github.com/diamondburned/twikit"
+	twikitModule       = "github.com/twipi/twikit"
 	output             = "twid"
 	debug              = false
 	extraModules       StringsFlag

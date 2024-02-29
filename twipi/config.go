@@ -2,12 +2,16 @@ package twipi
 
 import (
 	"context"
+	"log"
+	"log/slog"
 	"net/url"
+	"slices"
 
-	"github.com/diamondburned/twikit/utils/cfgutil"
-	"github.com/diamondburned/twikit/logger"
 	"github.com/pkg/errors"
+	"github.com/twipi/twikit/internal/cfgutil"
+	"github.com/twipi/twikit/internal/slogctx"
 
+	twilioapi "github.com/twilio/twilio-go/rest/api/v2010"
 	twiliomessaging "github.com/twilio/twilio-go/rest/messaging/v1"
 )
 
@@ -31,6 +35,7 @@ type ConfigAccount struct {
 	AccountSID  cfgutil.EnvString        `toml:"account_sid" json:"account_sid"`
 	AuthToken   cfgutil.EnvString        `toml:"auth_token" json:"auth_token"`
 	BaseURL     cfgutil.EnvString        `json:"base_url" toml:"base_url"`
+	ManagedName string                   `json:"managed_name" toml:"managed_name"`
 	Override    bool                     `json:"override" toml:"override"`
 }
 
@@ -88,162 +93,6 @@ func NewConfiguredServer(c Config) (*ConfiguredServer, error) {
 	return &s, nil
 }
 
-// UpdateTwilio updates the Twilio Messaging services to work with Twipi. This
-// function does not return any errors; they will simply be logged.
-func (c *ConfiguredServer) UpdateTwilio(ctx context.Context) {
-	for _, account := range c.Config.Accounts {
-		ctx := logger.WithLogPrefix(ctx, "twipi: populateMessageService: "+account.PhoneNumber.String())
-		client := c.Client.FromPhone(account.PhoneNumber.Value())
-		populateMessageServiceAccount(ctx, client, c.Config, account)
-	}
-}
-
-func populateMessageServiceAccount(
-	ctx context.Context,
-	client *AccountClient,
-	cfg Config,
-	cfgAccount ConfigAccount) {
-
-	if !cfgAccount.Override {
-		return
-	}
-
-	log := logger.FromContext(ctx)
-
-	var incomingURL *string
-	var deliveryURL *string
-
-	if cfg.Message.Webhook.IncomingEndpoint != "" {
-		u, _ := url.Parse(cfgAccount.BaseURL.String())
-		u.Path = cfg.Message.Webhook.IncomingEndpoint
-		incomingURL = vptr(u.String())
-	}
-
-	if cfg.Message.Webhook.DeliveryEndpoint != "" {
-		u, _ := url.Parse(cfgAccount.BaseURL.String())
-		u.Path = cfg.Message.Webhook.DeliveryEndpoint
-		deliveryURL = vptr(u.String())
-	}
-
-	var twipiSID string
-	var createdService bool
-
-	services, errs := client.MessagingV1.StreamService(nil)
-	for service := range services {
-		if nilz(service.FriendlyName) != "twipi" {
-			continue
-		}
-
-		if nilz(service.InboundRequestUrl) == nilz(incomingURL) &&
-			nilz(service.StatusCallback) == nilz(deliveryURL) {
-			// Found.
-			twipiSID = nilz(service.Sid)
-			goto checkNumber
-		}
-
-		// Found a service named twipi, but it's not the
-		// right one. We'll update that one.
-		twipiSID = nilz(service.Sid)
-		goto createService
-	}
-
-	if err := <-errs; err != nil {
-		log.Println("failed to stream services:", err)
-		return
-	}
-
-createService:
-	createdService = true
-
-	// Not found, create a new one.
-	if twipiSID == "" {
-		v, err := client.MessagingV1.CreateService(&twiliomessaging.CreateServiceParams{
-			FriendlyName:              vptr("twipi"),
-			InboundMethod:             vptr("POST"),
-			InboundRequestUrl:         incomingURL,
-			StatusCallback:            deliveryURL,
-			UseInboundWebhookOnNumber: vptr(false),
-		})
-		if err != nil {
-			log.Println("failed to create messaging service:", err)
-			return
-		}
-		twipiSID = nilz(v.Sid)
-	} else {
-		_, err := client.MessagingV1.UpdateService(twipiSID, &twiliomessaging.UpdateServiceParams{
-			FriendlyName:              vptr("twipi"),
-			InboundMethod:             vptr("POST"),
-			InboundRequestUrl:         incomingURL,
-			StatusCallback:            deliveryURL,
-			UseInboundWebhookOnNumber: vptr(false),
-		})
-		if err != nil {
-			log.Println("failed to update messaging service:", err)
-			return
-		}
-	}
-
-checkNumber:
-	// Check that this service has the right numbers.
-	serviceNumbers, errs := client.MessagingV1.StreamPhoneNumber(twipiSID, nil)
-	for number := range serviceNumbers {
-		if nilz(number.PhoneNumber) == string(client.Account.PhoneNumber) {
-			if createdService {
-				log.Println("successfully set up service")
-			}
-			return
-		}
-	}
-
-	if err := <-errs; err != nil {
-		log.Println("failed to stream service numbers:", err)
-		return
-	}
-
-	var numberSID string
-
-	numbers, errs := client.Api.StreamIncomingPhoneNumber(nil)
-	for number := range numbers {
-		if nilz(number.PhoneNumber) == string(client.Account.PhoneNumber) {
-			numberSID = nilz(number.Sid)
-			break
-		}
-	}
-
-	if err := <-errs; err != nil {
-		log.Println("failed to stream known numbers:", err)
-		return
-	}
-
-	if numberSID == "" {
-		log.Println("number not found in Twilio")
-		return
-	}
-
-	// Set the number to use the service.
-	_, err := client.MessagingV1.CreatePhoneNumber(twipiSID, &twiliomessaging.CreatePhoneNumberParams{
-		PhoneNumberSid: vptr(numberSID),
-	})
-	if err != nil {
-		log.Println("failed to set number to use service:", err)
-		return
-	}
-
-	log.Println("successfully set up service")
-}
-
-func vptr[T any](s T) *T {
-	return &s
-}
-
-func nilz[T any](s *T) T {
-	if s == nil {
-		var z T
-		return z
-	}
-	return *s
-}
-
 // NewConfiguredServerFromPath creates a new ConfiguredServer from a config file
 // path. The file extension is used to determine the config format.
 func NewConfiguredServerFromPath(path string) (*ConfiguredServer, error) {
@@ -253,4 +102,169 @@ func NewConfiguredServerFromPath(path string) (*ConfiguredServer, error) {
 	}
 
 	return NewConfiguredServer(*c)
+}
+
+// UpdateTwilio updates the Twilio Messaging services to work with Twipi. This
+// function does not return any errors; they will simply be logged.
+func (c *ConfiguredServer) UpdateTwilio(ctx context.Context) {
+	for _, account := range c.Config.Accounts {
+		client := c.Client.FromPhone(account.PhoneNumber.Value())
+		logger := slogctx.From(ctx).With(
+			"account.account_sid", account.AccountSID,
+			"account.phone_number", account.PhoneNumber.String(),
+		)
+
+		populateMessageServiceAccount(ctx, client, logger, c.Config, account)
+	}
+}
+
+func populateMessageServiceAccount(
+	ctx context.Context,
+	client *AccountClient,
+	logger *slog.Logger,
+	cfg Config,
+	cfgAccount ConfigAccount) {
+
+	friendlyName := "twipi"
+	if cfgAccount.ManagedName != "" {
+		friendlyName = cfgAccount.ManagedName
+	}
+
+	logger = logger.With(
+		"account.friendly_name", friendlyName,
+		"action", "populateMessageServiceAccount",
+	)
+
+	if !cfgAccount.Override {
+		logger.DebugContext(ctx, "skipping account as configured")
+		return
+	}
+
+	var incomingURL *string
+	var deliveryURL *string
+
+	if cfg.Message.Webhook.IncomingEndpoint != "" {
+		u, _ := url.Parse(cfgAccount.BaseURL.String())
+		u.Path = cfg.Message.Webhook.IncomingEndpoint
+		incomingURL = ptrTo(u.String())
+	}
+
+	if cfg.Message.Webhook.DeliveryEndpoint != "" {
+		u, _ := url.Parse(cfgAccount.BaseURL.String())
+		u.Path = cfg.Message.Webhook.DeliveryEndpoint
+		deliveryURL = ptrTo(u.String())
+	}
+
+	services, err := client.MessagingV1.ListService(nil)
+	if err != nil {
+		slog.ErrorContext(ctx,
+			"failed to list MessagingV1 services",
+			"err", err)
+		return
+	}
+
+	service := findFunc(services, func(s twiliomessaging.MessagingV1Service) bool {
+		return deref(s.FriendlyName) == friendlyName
+	})
+	if service == nil {
+		v, err := client.MessagingV1.CreateService(&twiliomessaging.CreateServiceParams{
+			FriendlyName:              ptrTo(friendlyName),
+			InboundMethod:             ptrTo("POST"),
+			InboundRequestUrl:         incomingURL,
+			StatusCallback:            deliveryURL,
+			UseInboundWebhookOnNumber: ptrTo(false),
+		})
+		if err != nil {
+			slog.ErrorContext(ctx,
+				"failed to create messaging service",
+				"err", err)
+			return
+		}
+		service = v
+	}
+
+	if service.Sid == nil {
+		slog.ErrorContext(ctx,
+			"service.Sid is unexpectedly nil")
+		return
+	}
+
+	if service != nil && (false ||
+		deref(service.InboundRequestUrl) != deref(incomingURL) ||
+		deref(service.StatusCallback) != deref(deliveryURL)) {
+
+		_, err := client.MessagingV1.UpdateService(*service.Sid, &twiliomessaging.UpdateServiceParams{
+			FriendlyName:              ptrTo("twipi"),
+			InboundMethod:             ptrTo("POST"),
+			InboundRequestUrl:         incomingURL,
+			StatusCallback:            deliveryURL,
+			UseInboundWebhookOnNumber: ptrTo(false),
+		})
+		if err != nil {
+			log.Println("failed to update messaging service:", err)
+			return
+		}
+	}
+
+	// Check that this service has the right numbers.
+	serviceNumbers, err := client.MessagingV1.ListPhoneNumber(*service.Sid, nil)
+	if err != nil {
+		slog.ErrorContext(ctx,
+			"failed to list phone numbers for messaging service",
+			"err", err)
+		return
+	}
+
+	serviceNumber := findFunc(serviceNumbers, func(n twiliomessaging.MessagingV1PhoneNumber) bool {
+		return deref(n.PhoneNumber) == string(client.Account.PhoneNumber)
+	})
+	if serviceNumber == nil {
+		numbers, err := client.Api.ListIncomingPhoneNumber(nil)
+		if err != nil {
+			slog.ErrorContext(ctx,
+				"failed to list incoming phone numbers",
+				"err", err)
+			return
+		}
+
+		number := findFunc(numbers, func(number twilioapi.ApiV2010IncomingPhoneNumber) bool {
+			return deref(number.PhoneNumber) == string(client.Account.PhoneNumber)
+		})
+		if number == nil {
+			slog.ErrorContext(ctx,
+				"number not found in Twilio",
+				"incoming_phone_numbers", len(numbers))
+			return
+		}
+
+		// Set the number to use the service.
+		_, err = client.MessagingV1.CreatePhoneNumber(*service.Sid, &twiliomessaging.CreatePhoneNumberParams{
+			PhoneNumberSid: number.Sid,
+		})
+		if err != nil {
+			log.Println("failed to set number to use service:", err)
+			return
+		}
+	}
+
+	slog.Info("successfully set up service")
+}
+
+func ptrTo[T any](s T) *T {
+	return &s
+}
+
+func deref[T any](s *T) T {
+	if s == nil {
+		var z T
+		return z
+	}
+	return *s
+}
+
+func findFunc[T any](items []T, f func(T) bool) *T {
+	if i := slices.IndexFunc(items, f); i != -1 {
+		return &items[i]
+	}
+	return nil
 }

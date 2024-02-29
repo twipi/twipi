@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/diamondburned/twikit/logger"
-	"github.com/diamondburned/twikit/twipi"
 	"github.com/pkg/errors"
+	"github.com/twipi/twikit/internal/slogctx"
+	"github.com/twipi/twikit/twipi"
 )
 
 // PrefixFunc returns true if the given message body string should activate the
@@ -169,8 +169,13 @@ func (c *Command) DoAndReply(ctx context.Context, cli *twipi.Client, msg twipi.M
 	if err := c.Do(ctx, Message{msg, msg.Body}); err != nil {
 		errBody := ErrorMessage(err)
 		if err := cli.ReplySMS(ctx, msg, errBody); err != nil {
-			log := logger.FromContext(ctx, "twicli")
-			log.Printf("%s replying to %s: cannot send SMS: %v", msg.From, msg.To, err)
+			logger := slogctx.From(ctx)
+			logger.ErrorContext(ctx,
+				"cannot reply with error message",
+				"do_err", err,
+				"reply_err", err,
+				"from", msg.From,
+				"to", msg.To)
 		}
 	}
 }

@@ -1,16 +1,17 @@
 package twipi
 
 import (
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
 
-	"github.com/diamondburned/twikit/utils/pubsub"
-	"github.com/diamondburned/twikit/utils/srvutil"
-	"github.com/diamondburned/twikit/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/twilio/twilio-go/twiml"
+	"github.com/twipi/twikit/internal/pubsub"
+	"github.com/twipi/twikit/internal/slogctx"
+	"github.com/twipi/twikit/internal/srvutil"
 )
 
 // PhoneNumber is a phone number.
@@ -40,9 +41,10 @@ func (m *Message) tryReply(msg Message) bool {
 
 // MessageHandler is a handler for incoming messages.
 type MessageHandler struct {
-	subs pubsub.Subscriber[Message]
-	msgs chan Message
-	stop chan struct{}
+	subs  pubsub.Subscriber[Message]
+	msgs  chan Message
+	stop  chan struct{}
+	group slog.Attr
 
 	incomingPath string
 	deliveryPath string
@@ -55,8 +57,12 @@ var _ WebhookRegisterer = (*MessageHandler)(nil)
 // any of the paths are empty, the corresponding webhook will be disabled.
 func NewMessageHandler(incomingPath, deliveryPath string) *MessageHandler {
 	h := &MessageHandler{
-		msgs:         make(chan Message),
-		stop:         make(chan struct{}),
+		msgs: make(chan Message),
+		stop: make(chan struct{}),
+		group: slog.Group(
+			"message_handler",
+			"incoming_path", incomingPath,
+			"delivery_path", deliveryPath),
 		incomingPath: incomingPath,
 		deliveryPath: deliveryPath,
 	}
@@ -166,8 +172,10 @@ func (l *MessageHandler) handleIncoming(w http.ResponseWriter, r *http.Request) 
 
 	xml, err := messageToTwiML(reply)
 	if err != nil {
-		log := logger.FromContext(r.Context())
-		log.Println("twipi: failed to encode TwiML:", err)
+		logger := slogctx.From(r.Context())
+		logger.ErrorContext(r.Context(),
+			"failed to encode reply TwiML, dropping request", l.group,
+			"err", err)
 		return
 	}
 

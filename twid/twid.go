@@ -18,13 +18,14 @@ import (
 	"strings"
 
 	"github.com/diamondburned/listener"
-	"github.com/diamondburned/twikit/logger"
-	"github.com/diamondburned/twikit/twicli"
-	"github.com/diamondburned/twikit/twipi"
-	"github.com/diamondburned/twikit/utils/cfgutil"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
+	"github.com/twipi/twikit/internal/cfgutil"
+	"github.com/twipi/twikit/internal/slogctx"
+	"github.com/twipi/twikit/twicli"
+	"github.com/twipi/twikit/twipi"
 	"golang.org/x/sync/errgroup"
+	"libdb.so/ctxt"
 )
 
 // Config is the twid config block.
@@ -252,12 +253,11 @@ func (l *Loader) LoadConfig(b []byte, configType string) error {
 // Start starts the HTTP server and the loaded modules' handlers. It blocks
 // until the context is canceled or any of the handlers fail to start.
 func (l *Loader) Start(ctx context.Context) error {
-	ctx = logger.WithLogPrefix(ctx, "twid")
-
 	if !l.enabled["twid"] {
 		return errors.New("twid is not enabled") // lol ??
 	}
 
+	logger := slogctx.From(ctx)
 	errg, ctx := errgroup.WithContext(ctx)
 
 	if l.twipi != nil {
@@ -270,22 +270,24 @@ func (l *Loader) Start(ctx context.Context) error {
 
 	if l.http != nil {
 		errg.Go(func() error {
-			log := logger.FromContext(ctx)
-			log.Printf("starting HTTP server on %s", l.http.Addr)
-			defer log.Println("HTTP server stopped")
+			logger.InfoContext(ctx,
+				"starting HTTP server",
+				"addr", l.http.Addr)
+			defer logger.Info("HTTP server stopped")
 
 			return listener.HTTPListenAndServeCtx(ctx, l.http)
 		})
 	}
 
 	for name, handler := range l.handlers {
+		logger := logger.With("module", name)
+		ctx := ctxt.With(ctx, logger)
+
 		if !l.enabled[name] {
-			log := logger.FromContext(ctx)
-			log.Println("skipping disabled module", name)
+			logger.DebugContext(ctx, "skipping disabled module")
 			continue
 		}
 
-		ctx := logger.WithLogPrefix(ctx, name)
 		name := name
 		handler := handler
 
@@ -335,9 +337,8 @@ func (l *Loader) Start(ctx context.Context) error {
 		}
 
 		errg.Go(func() error {
-			log := logger.FromContext(ctx)
-			log.Println("starting module")
-			defer log.Println("module stopped")
+			logger.Info("starting module")
+			defer logger.Info("module stopped")
 
 			if err := handler.Start(ctx); err != nil {
 				return errors.Wrapf(err, "failed to start module %q", name)

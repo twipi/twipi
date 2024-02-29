@@ -10,8 +10,8 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/diamondburned/twikit/utils/cfgutil"
-	"github.com/diamondburned/twikit/twipi"
+	"github.com/twipi/twikit/internal/cfgutil"
+	"github.com/twipi/twikit/twipi"
 	"github.com/pkg/errors"
 )
 
