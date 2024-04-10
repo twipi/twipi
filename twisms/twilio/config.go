@@ -2,7 +2,6 @@ package twilio
 
 import (
 	"github.com/twipi/cfgutil"
-	"github.com/twipi/twipi/twisms"
 )
 
 // Config is the primary config for Twipi webhook handlers. Pair it with a
@@ -21,12 +20,12 @@ type Config struct {
 
 // ConfigAccount is an account config block.
 type ConfigAccount struct {
-	PhoneNumber cfgutil.Env[twisms.PhoneNumber] `toml:"phone_number" json:"phone_number"`
-	AccountSID  cfgutil.EnvString               `toml:"account_sid" json:"account_sid"`
-	AuthToken   cfgutil.EnvString               `toml:"auth_token" json:"auth_token"`
-	BaseURL     cfgutil.EnvString               `json:"base_url" toml:"base_url"`
-	ManagedName string                          `json:"managed_name" toml:"managed_name"`
-	Override    bool                            `json:"override" toml:"override"`
+	PhoneNumber cfgutil.Env[string] `toml:"phone_number" json:"phone_number"`
+	AccountSID  cfgutil.EnvString   `toml:"account_sid" json:"account_sid"`
+	AuthToken   cfgutil.EnvString   `toml:"auth_token" json:"auth_token"`
+	BaseURL     cfgutil.EnvString   `json:"base_url" toml:"base_url"`
+	ManagedName string              `json:"managed_name" toml:"managed_name"`
+	Override    bool                `json:"override" toml:"override"`
 }
 
 // Value returns c as the Account type.

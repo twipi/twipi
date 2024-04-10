@@ -1,66 +1,38 @@
 package twilio
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twilio/twilio-go/twiml"
 	"github.com/twipi/twipi/internal/pubsub"
 	"github.com/twipi/twipi/internal/srvutil"
+	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twisms"
 	"libdb.so/ctxt"
 )
 
-// SMS describes an SMS message.
-type SMS struct {
-	from    twisms.PhoneNumber
-	to      twisms.PhoneNumber
-	body    string
-	replier chan SMS
-}
-
-var _ twisms.Message = SMS{}
-
-// From implements twisms.Message.
-func (m SMS) From() twisms.PhoneNumber {
-	return m.from
-}
-
-// To implements twisms.Message.
-func (m SMS) To() twisms.PhoneNumber {
-	return m.to
-}
-
-// Body implements twisms.Message.
-func (m SMS) Body() twisms.MessageBody {
-	return twisms.MessageBodyText(m.body)
-}
-
-func (m SMS) tryReply(msg SMS) bool {
-	if m.replier == nil {
-		return false
-	}
-
-	select {
-	case m.replier <- msg:
-		return true
-	default:
-		return false
-	}
-}
-
 // MessageHandler is a handler for incoming messages.
 type MessageHandler struct {
-	subs   pubsub.Subscriber[twisms.Message]
-	msgs   chan twisms.Message
-	stop   chan struct{}
+	subs pubsub.Subscriber[*twismsproto.Message]
+	msgs chan *twismsproto.Message
+	stop chan struct{}
+	wg   sync.WaitGroup
+
 	group  slog.Attr
 	router *chi.Mux
+
+	// replies tracks known incoming messages and map them to the right send
+	// channel for replying.
+	replies *xsync.MapOf[*twismsproto.Message, chan<- *twismsproto.Message]
 
 	incomingPath string
 	deliveryPath string
@@ -77,13 +49,15 @@ var (
 // any of the paths are empty, the corresponding webhook will be disabled.
 func NewMessageHandler(incomingPath, deliveryPath string) *MessageHandler {
 	l := &MessageHandler{
-		msgs: make(chan twisms.Message),
+		msgs: make(chan *twismsproto.Message),
 		stop: make(chan struct{}),
 		group: slog.Group(
+			"twilio.component", "message_handler",
 			"message_handler",
 			"incoming_path", incomingPath,
 			"delivery_path", deliveryPath),
 		router:       chi.NewMux(),
+		replies:      xsync.NewMapOf[*twismsproto.Message, chan<- *twismsproto.Message](),
 		incomingPath: incomingPath,
 		deliveryPath: deliveryPath,
 	}
@@ -121,12 +95,14 @@ func NewMessageHandlerFromConfig(c Config) *MessageHandler {
 // SubscribeMessages subscribes the given channel to incoming messages. If
 // recipient is not empty, only messages sent to that recipient will be
 // published to the channel.
-func (l *MessageHandler) SubscribeMessages(ch chan<- twisms.Message, filter pubsub.FilterFunc[twisms.Message]) {
-	l.subs.Subscribe(ch, filter)
+func (l *MessageHandler) SubscribeMessages(ch chan<- *twismsproto.Message, filters *twismsproto.MessageFilters) {
+	l.subs.Subscribe(ch, func(msg *twismsproto.Message) bool {
+		return twisms.FilterMessage(filters, msg)
+	})
 }
 
 // UnsubscribeMessages unsubscribes the given channel from incoming messages.
-func (l *MessageHandler) UnsubscribeMessages(ch chan<- twisms.Message) {
+func (l *MessageHandler) UnsubscribeMessages(ch chan<- *twismsproto.Message) {
 	l.subs.Unsubscribe(ch)
 }
 
@@ -142,8 +118,24 @@ func (l *MessageHandler) Close() error {
 	}
 
 	close(l.stop)
+	l.wg.Wait()
 	l.msgs = nil
 	return nil
+}
+
+func (l *MessageHandler) tryReply(msg *twismsproto.Message, body *twismsproto.MessageBody) bool {
+	// Try stealing the reply channel from the map.
+	replyCh, ok := l.replies.LoadAndDelete(msg)
+	if !ok {
+		return false
+	}
+
+	select {
+	case replyCh <- twisms.NewReplyingMessage(msg, body):
+		return true
+	default:
+		return false
+	}
 }
 
 type incomingMessage struct {
@@ -167,47 +159,45 @@ func (l *MessageHandler) handleIncoming(w http.ResponseWriter, r *http.Request) 
 		Body:                r.FormValue("Body"),
 	}
 
-	replyCh := make(chan SMS, 1)
-
-	msg := SMS{
-		from:    twisms.PhoneNumber(incoming.From),
-		to:      twisms.PhoneNumber(incoming.To),
-		body:    incoming.Body,
-		replier: replyCh,
+	replyCh := make(chan *twismsproto.Message, 1)
+	msg := &twismsproto.Message{
+		From: incoming.From,
+		To:   incoming.To,
+		Body: &twismsproto.MessageBody{
+			Body: &twismsproto.MessageBody_Text{
+				Text: &twismsproto.TextBody{Text: incoming.Body},
+			},
+		},
 	}
 
+	l.replies.Store(msg, replyCh)
+	defer l.replies.Delete(msg)
+
+	l.wg.Add(1)
 	go func() {
+		defer l.wg.Done()
+
 		select {
 		case l.msgs <- msg:
 		case <-l.stop:
 		}
 	}()
 
-	timeout := time.NewTimer(3 * time.Second)
-	defer timeout.Stop()
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
 
-	var reply SMS
+	var reply *twismsproto.Message
 	select {
 	case reply = <-replyCh:
 		// ok, do the reply
-	case <-timeout.C:
-		// Timeout. Block the channel by trying to fill it with an empty
-		// message. If the channel is already full, then the message will be
-		// taken.
-		select {
-		case replyCh <- SMS{}:
-			// We blocked the channel. Do nothing.
-		case reply = <-replyCh:
-			// The channel was already blocked. Do the reply.
-		}
-	case <-r.Context().Done():
+	case <-ctx.Done():
 		return
 	}
 
 	xml, err := messageToTwiML(reply)
 	if err != nil {
-		logger := ctxt.FromOrFunc(r.Context(), slog.Default)
-		logger.ErrorContext(r.Context(),
+		logger := ctxt.FromOrFunc(ctx, slog.Default)
+		logger.ErrorContext(ctx,
 			"failed to encode reply TwiML, dropping request", l.group,
 			"err", err)
 		return
@@ -217,12 +207,16 @@ func (l *MessageHandler) handleIncoming(w http.ResponseWriter, r *http.Request) 
 	w.Write(xml)
 }
 
-func messageToTwiML(msg SMS) ([]byte, error) {
+func messageToTwiML(msg *twismsproto.Message) ([]byte, error) {
 	xmlDoc, rootElem := twiml.CreateDocument()
-	if msg.body != "" {
+
+	switch body := msg.Body.Body.(type) {
+	case *twismsproto.MessageBody_Text:
 		token := xmlDoc.CreateElement("Message")
-		token.SetText(msg.body)
+		token.SetText(body.Text.Text)
 		rootElem.AddChild(token)
+	default:
+		return nil, ErrUnsupportedMessageBody
 	}
 
 	xml, err := twiml.ToXML(xmlDoc)

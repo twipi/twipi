@@ -2,59 +2,98 @@ package twisms
 
 import (
 	"context"
-	"errors"
 
-	"github.com/twipi/twipi/internal/pubsub"
+	"github.com/twipi/twipi/proto/out/twismsproto"
 )
-
-// PhoneNumber is a phone number.
-type PhoneNumber string
-
-// Message describes an SMS message.
-type Message interface {
-	// From returns the phone number the message was sent from.
-	From() PhoneNumber
-	// To returns the phone number the message was sent to.
-	To() PhoneNumber
-	// Body returns the message body.
-	Body() MessageBody
-}
-
-// MessageBody describes various types of message bodies.
-// The most common type is [MessageBodyText].
-type MessageBody interface {
-	messageBody()
-}
-
-var (
-	_ MessageBody = MessageBodyText("")
-)
-
-// ErrNonTextMessageBody is returned when a message body is not a text message.
-// This is used by [MessageSender] to indicate that the message body is not
-// supported.
-var ErrNonTextMessageBody = errors.New("non-text message body unsupported")
-
-// MessageBodyText is a simple text message body.
-type MessageBodyText string
-
-func (MessageBodyText) messageBody() {}
 
 // MessageSubscriber describes a service that can subscribe to incoming
 // messages.
 type MessageSubscriber interface {
 	// SubscribeMessages subscribes to incoming messages for the given
 	// recipient.
-	SubscribeMessages(ch chan<- Message, filter pubsub.FilterFunc[Message])
+	SubscribeMessages(ch chan<- *twismsproto.Message, filters *twismsproto.MessageFilters)
 	// UnsubscribeMessages unsubscribes the given channel from incoming
 	// messages.
-	UnsubscribeMessages(ch chan<- Message)
+	UnsubscribeMessages(ch chan<- *twismsproto.Message)
 }
 
-// MessageSender describes a service that can send and reply to messages.
+// FilterMessage filters the given message based on the given filters.
+// It implements the given set of filters in Go code.
+func FilterMessage(filters *twismsproto.MessageFilters, msg *twismsproto.Message) bool {
+	for _, filter := range filters.GetFilters() {
+		switch filter := filter.GetFilter().(type) {
+		case *twismsproto.MessageFilter_MatchFrom:
+			if msg.GetFrom() != filter.MatchFrom {
+				return false
+			}
+		case *twismsproto.MessageFilter_MatchTo:
+			if msg.GetTo() != filter.MatchTo {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// MessageSender describes a service that can send messages.
 type MessageSender interface {
-	// SendSMS sends an SMS message to the given recipient.
-	SendSMS(ctx context.Context, msg Message) error
-	// ReplySMS replies to the given message.
-	ReplySMS(ctx context.Context, msg Message, body MessageBody) error
+	// SendMessage sends an SMS message to the given recipient.
+	SendMessage(ctx context.Context, msg *twismsproto.Message) error
+}
+
+// MessageReplier describes a service that can reply to messages.
+// It is meant to extend the MessageSender interface and provide services with a
+// fast path for synchronous replies. It is optional and services can choose to
+// not implement it.
+type MessageReplier interface {
+	MessageSender
+
+	// ReplyMessage replies to the given message.
+	ReplyMessage(ctx context.Context, msg *twismsproto.Message, body *twismsproto.MessageBody) error
+}
+
+// NewReplyingMessage creates a new message that is a reply to the given message
+// with the given body.
+func NewReplyingMessage(msg *twismsproto.Message, body *twismsproto.MessageBody) *twismsproto.Message {
+	return &twismsproto.Message{
+		From: msg.To,
+		To:   msg.From,
+		Body: body,
+	}
+}
+
+// ReplyMessage is a helper function that replies to the given message using the
+// provided MessageSender. If it implements MessageReplier, it will use the fast
+// path for synchronous replies.
+func ReplyMessage(ctx context.Context, s MessageSender, msg *twismsproto.Message, body *twismsproto.MessageBody) error {
+	if r, ok := s.(MessageReplier); ok {
+		return r.ReplyMessage(ctx, msg, body)
+	}
+	reply := twismsproto.Message{
+		From: msg.To,
+		To:   msg.From,
+		Body: body,
+	}
+	return s.SendMessage(ctx, &reply)
+}
+
+// MessageSubscribeSender is a convenience interface that combines
+// [MessageSubscriber] and [MessageSender].
+type MessageSubscribeSender interface {
+	MessageSubscriber
+	MessageSender
+}
+
+type combinedMessageSubscribeSender struct {
+	MessageSubscriber
+	MessageSender
+}
+
+// CombineMessageSubscribeSender combines a [MessageSubscriber] and a
+// [MessageSender] into a single [MessageSubscribeSender].
+func CombineMessageSubscribeSender(sub MessageSubscriber, send MessageSender) MessageSubscribeSender {
+	return &combinedMessageSubscribeSender{
+		MessageSubscriber: sub,
+		MessageSender:     send,
+	}
 }
