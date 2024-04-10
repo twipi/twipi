@@ -1,0 +1,13 @@
+version: '3'
+
+vars:
+  GO_MODULE: github.com/twipi/twipi
+
+includes:
+  proto:
+    taskfile: proto/Taskfile.yml
+    dir: proto
+
+tasks:
+  default:
+    deps: [proto:compile]

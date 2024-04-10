@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package twicmd;
+
+option go_package = "github.com/twipi/twipi/proto/out/twicmdproto";
+
+message Command {
+  // The start of each slash command. Each service registers its own
+  // single-word name, usually the brand name, to be used in this.
+  string service = 1;
+  // Command arguments, in the format key:value. This must be immediately
+  // after the service name.
+  repeated CommandArgument args = 2;
+  // The trailing argument, in the format value. This particular argument
+  // requires no quoting.
+  optional CommandArgument tail = 3;
+}
+
+message CommandArgument {
+  string key = 1;
+  string value = 2;
+  optional string description = 3;
+  // The hint that the parser will use.
+  // The NLP will also use it to determine speech recognition.
+  optional CommandArgumentHint hint = 4;
+}
+
+enum CommandArgumentHint {
+  COMMAND_ARGUMENT_HINT_UNSPECIFIED = 0;
+  COMMAND_ARGUMENT_HINT_NONE = 1;
+  COMMAND_ARGUMENT_HINT_STRING = 2;
+  COMMAND_ARGUMENT_HINT_NUMBER = 3;
+  COMMAND_ARGUMENT_HINT_INTEGER = 4;
+  COMMAND_ARGUMENT_HINT_PERSON = 5;
+  COMMAND_ARGUMENT_HINT_EMAIL = 6;
+  COMMAND_ARGUMENT_HINT_PHONE_NUMBER = 7;
+  COMMAND_ARGUMENT_HINT_ADDRESS = 8;
+  // ...
+}

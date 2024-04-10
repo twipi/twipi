@@ -1,0 +1,15 @@
+version: '3'
+
+tasks:
+  compile:
+    watch: true
+    sources:
+      - "*.proto"
+    generates:
+      - out
+    cmds:
+      - rm -r out
+      - for: sources
+        cmd: protoc --proto_path=. --go_out=. {{ .ITEM }}
+      - mv "{{ .GO_MODULE }}/proto"/* ./
+      - rmdir -p "{{ .GO_MODULE }}/proto"

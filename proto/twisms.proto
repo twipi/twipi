@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package twisms;
+
+option go_package = "github.com/twipi/twipi/proto/out/twismsproto";
+
+// A text message.
+message Message {
+  // The phone number of the sender.
+  string from = 1;
+  // The phone number of the recipient.
+  string to = 2;
+  // The body of the message.
+  MessageBody body = 3;
+}
+
+// The body of the message, which may be a text message (SMS) or a richer
+// message.
+message MessageBody {
+  oneof body {
+    TextBody text = 1;
+  }
+}
+
+// A plain text message body for an SMS. The content length is limited to 160
+// bytes.
+message TextBody {
+  // The text of the message.
+  string text = 1;
+}
+
+// A generic filter for messages.
+message MessageFilter {
+  oneof filter {
+    string match_from = 1;
+    string match_to = 2;
+  }
+}
+
+// A collection of message filters.
+message MessageFilters {
+  repeated MessageFilter filters = 1;
+}

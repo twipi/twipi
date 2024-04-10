@@ -16,6 +16,13 @@
 						go
 						gopls
 						gotools
+
+						protolint
+						protobuf
+						protoc-gen-go
+						protoc-gen-doc
+
+						go-task
 					];
 				};
 			}
