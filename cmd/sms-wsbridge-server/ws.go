@@ -89,7 +89,7 @@ readLoop:
 
 	var closeReason string
 	if closeErr != nil && !errors.Is(closeErr, io.EOF) {
-		closeReason = err.Error()
+		closeReason = closeErr.Error()
 	}
 
 	if err := conn.Close(closeCode, closeReason); err != nil {
