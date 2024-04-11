@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package wsbridge;
+
+import "twisms.proto";
+
+option go_package = "github.com/twipi/twipi/proto/out/wsbridgeproto";
+
+message WebsocketPacket {
+  oneof body {
+    Error error = 1;
+    IncomingMessage incoming = 2;
+    SendMessage send = 3;
+  };
+}
+
+message SendMessage {
+  twisms.Message message = 1;
+}
+
+message IncomingMessage {
+  twisms.Message message = 1;
+}
+
+message Error {
+  string message = 1;
+}
