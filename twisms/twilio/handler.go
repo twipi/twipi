@@ -168,9 +168,7 @@ func (l *MessageHandler) handleIncoming(w http.ResponseWriter, r *http.Request) 
 		From: incoming.From,
 		To:   incoming.To,
 		Body: &twismsproto.MessageBody{
-			Body: &twismsproto.MessageBody_Text{
-				Text: &twismsproto.TextBody{Text: incoming.Body},
-			},
+			Text: &twismsproto.TextBody{Text: incoming.Body},
 		},
 	}
 
@@ -214,13 +212,10 @@ func (l *MessageHandler) handleIncoming(w http.ResponseWriter, r *http.Request) 
 func messageToTwiML(msg *twismsproto.Message) ([]byte, error) {
 	xmlDoc, rootElem := twiml.CreateDocument()
 
-	switch body := msg.Body.Body.(type) {
-	case *twismsproto.MessageBody_Text:
+	if msg.Body.Text != nil {
 		token := xmlDoc.CreateElement("Message")
-		token.SetText(body.Text.Text)
+		token.SetText(msg.Body.Text.Text)
 		rootElem.AddChild(token)
-	default:
-		return nil, ErrUnsupportedMessageBody
 	}
 
 	xml, err := twiml.ToXML(xmlDoc)

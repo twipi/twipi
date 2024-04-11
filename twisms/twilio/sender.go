@@ -97,12 +97,9 @@ func (c *MessageSender) SendMessage(ctx context.Context, msg *twismsproto.Messag
 	params.SetFrom(msg.From)
 	params.SetTo(msg.To)
 
-	switch body := msg.Body.Body.(type) {
-	case *twismsproto.MessageBody_Text:
-		params.SetBody(body.Text.Text)
+	if msg.Body.Text != nil {
+		params.SetBody(msg.Body.Text.Text)
 		params.SetSmartEncoded(true)
-	default:
-		return ErrUnsupportedMessageBody
 	}
 
 	_, err := client.Api.CreateMessage(params)

@@ -17,9 +17,8 @@ message Message {
 // The body of the message, which may be a text message (SMS) or a richer
 // message.
 message MessageBody {
-  oneof body {
-    TextBody text = 1;
-  }
+  // The text content of the message.
+  TextBody text = 1;
 }
 
 // A plain text message body for an SMS. The content length is limited to 160
