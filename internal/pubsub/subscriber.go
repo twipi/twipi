@@ -24,31 +24,29 @@ func NewSubscriber[T any]() *Subscriber[T] {
 	return &Subscriber[T]{}
 }
 
-// Listen spawns a goroutine that broadcasts messages received from the given
-// src channel.
+// Listen starts broadcasting messages received from the given src channel.
+// It blocks until the src channel is closed.
 func (s *Subscriber[T]) Listen(src <-chan T) {
 	if s.subs == nil {
 		s.subs = make(map[chan<- T]pipeSub[T])
 	}
 
-	go func() {
-		for msg := range src {
-			s.publish(msg)
+	for msg := range src {
+		s.publish(msg)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.subs != nil {
+		// Unsubscribe all channels. This will purge them from the map.
+		for ch := range s.subs {
+			s.unsub(ch)
 		}
 
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		if s.subs != nil {
-			// Unsubscribe all channels. This will purge them from the map.
-			for ch := range s.subs {
-				s.unsub(ch)
-			}
-
-			// Mark as done.
-			s.subs = nil
-		}
-	}()
+		// Mark as done.
+		s.subs = nil
+	}
 }
 
 func (s *Subscriber[T]) publish(value T) {

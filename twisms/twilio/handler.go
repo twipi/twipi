@@ -62,7 +62,11 @@ func NewMessageHandler(incomingPath, deliveryPath string) *MessageHandler {
 		deliveryPath: deliveryPath,
 	}
 
-	l.subs.Listen(l.msgs)
+	l.wg.Add(1)
+	go func() {
+		l.subs.Listen(l.msgs)
+		l.wg.Done()
+	}()
 
 	r := l.router
 	r.Use(srvutil.ParseForm)
