@@ -4,36 +4,65 @@ package twicmd;
 
 option go_package = "github.com/twipi/twipi/proto/out/twicmdproto";
 
-message Command {
-  // The start of each slash command. Each service registers its own
-  // single-word name, usually the brand name, to be used in this.
-  string service = 1;
-  // Command arguments, in the format key:value. This must be immediately
-  // after the service name.
-  repeated CommandArgument args = 2;
-  // The trailing argument, in the format value. This particular argument
-  // requires no quoting.
-  optional CommandArgument tail = 3;
+// A service that provides commands to be executed.
+message Service {
+  // The name of the service. Each service registers its own single-word name,
+  // usually the brand name, to be used in this.
+  string name = 1;
+  // The list of descriptions of commands that the service provides.
+  repeated CommandDescription commands = 2;
 }
 
-message CommandArgument {
-  string key = 1;
-  string value = 2;
-  optional string description = 3;
+// A description of a command that the service provides.
+// It mostly contains human-readable information about the command, but some
+// data may be used by the natural language processor.
+message CommandDescription {
+  // The name of the slash command.
+  string name = 1;
+  // The map of named arguments that the command accepts.
+  map<string, CommandArgumentDescription> arguments = 2;
+  // The order in which the named arguments are expected.
+  // This is only useful for positional parsing.
+  // Such a parser must also implement a fallback name=value parser.
+  repeated string argument_positions = 3;
+  // Whether the command accepts a trailing argument at the end.
+  // The last argument in the positions list is considered trailing.
+  // This is only meaningful if argument_positions is set.
+  bool argument_trailing = 4;
+}
+
+// A description of a command argument within a command.
+message CommandArgumentDescription {
+  // Whether the argument is required.
+  bool required = 1;
+  // The human-readable description of the argument.
+  string description = 2;
   // The hint that the parser will use.
-  // The NLP will also use it to determine speech recognition.
-  optional CommandArgumentHint hint = 4;
+  // The NLP will also use it to determine the argument's context.
+  CommandArgumentHint hint = 3;
 }
 
 enum CommandArgumentHint {
   COMMAND_ARGUMENT_HINT_UNSPECIFIED = 0;
-  COMMAND_ARGUMENT_HINT_NONE = 1;
-  COMMAND_ARGUMENT_HINT_STRING = 2;
-  COMMAND_ARGUMENT_HINT_NUMBER = 3;
-  COMMAND_ARGUMENT_HINT_INTEGER = 4;
-  COMMAND_ARGUMENT_HINT_PERSON = 5;
-  COMMAND_ARGUMENT_HINT_EMAIL = 6;
-  COMMAND_ARGUMENT_HINT_PHONE_NUMBER = 7;
-  COMMAND_ARGUMENT_HINT_ADDRESS = 8;
+  COMMAND_ARGUMENT_HINT_STRING = 1;
+  COMMAND_ARGUMENT_HINT_NUMBER = 2;
+  COMMAND_ARGUMENT_HINT_INTEGER = 3;
+  COMMAND_ARGUMENT_HINT_PERSON = 4;
+  COMMAND_ARGUMENT_HINT_EMAIL = 5;
+  COMMAND_ARGUMENT_HINT_PHONE_NUMBER = 6;
+  COMMAND_ARGUMENT_HINT_ADDRESS = 7;
   // ...
+}
+
+// A command to be executed sent by the user.
+message Command {
+  string service = 1;
+  string command = 2;
+  repeated CommandArgument arguments = 3;
+}
+
+// A command argument.
+message CommandArgument {
+  string name = 1;
+  string value = 2;
 }

@@ -1,0 +1,32 @@
+name: "discord"
+
+commands: {
+  name: "send"
+
+  arguments: [
+    {
+      key: "channel"
+      value: {
+        required: true
+        description: "The channel to send the message to."
+      }
+    },
+    {
+      key: "guild"
+      value: {
+        required: true
+        description: "The guild to send the message to."
+      }
+    },
+    {
+      key: "message"
+      value: {
+        required: true
+        description: "The message to send."
+      }
+    }
+  ]
+
+  argument_positions: ["guild", "channel", "message"]
+  argument_trailing: true
+}

@@ -3,7 +3,9 @@ module github.com/twipi/twipi
 go 1.22.0
 
 require (
+	github.com/alecthomas/assert/v2 v2.8.1
 	github.com/go-chi/chi/v5 v5.0.7
+	github.com/google/go-cmp v0.6.0
 	github.com/lmittmann/tint v1.0.4
 	github.com/pkg/errors v0.9.1
 	github.com/puzpuzpuz/xsync/v3 v3.1.0
@@ -13,11 +15,14 @@ require (
 	google.golang.org/protobuf v1.33.0
 	libdb.so/ctxt v0.0.0-20240229093153-2db38a5d3c12
 	libdb.so/hserve v0.0.0-20230404043009-95e112a6e0a5
+	mvdan.cc/sh/v3 v3.8.0
 	nhooyr.io/websocket v1.8.11
 )
 
 require (
+	github.com/alecthomas/repr v0.4.0 // indirect
 	github.com/beevik/etree v1.1.0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
+	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.1 // indirect
 )
