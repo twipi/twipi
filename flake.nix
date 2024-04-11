@@ -8,7 +8,7 @@
 		flake-utils.lib.eachDefaultSystem (system:
 			with nixpkgs.legacyPackages.${system}.extend (self: super: {
 				# Keep this in sync with go.mod.
-				go = super.go_1_21;
+				go = super.go_1_22;
 			});
 			{
 				devShell = mkShell {
