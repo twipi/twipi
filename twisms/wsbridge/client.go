@@ -3,9 +3,7 @@ package wsbridge
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -18,14 +16,13 @@ import (
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
 	"github.com/twipi/twipi/twid"
 	"github.com/twipi/twipi/twisms"
-	"google.golang.org/protobuf/encoding/protojson"
 	"nhooyr.io/websocket"
 )
 
 func init() {
 	twid.RegisterTwismsModule(twid.TwismsModule{
-		Name: "wsbridge",
-		Desc: "Proxy message sends and receives over a Websocket",
+		Name: "wsbridge_client",
+		Desc: "Proxy message sends and receives over a Websocket client",
 		New: func(raw json.RawMessage, logger *slog.Logger) (twisms.MessageService, error) {
 			var cfg ClientServiceConfig
 			if err := json.Unmarshal(raw, &cfg); err != nil {
@@ -91,7 +88,8 @@ func (s *ClientService) Start(ctx context.Context) error {
 		s.logger.Info("reconnecting wsbridge service connection")
 
 		conn, _, err := websocket.Dial(ctx, s.cfg.WSAddress, &websocket.DialOptions{
-			HTTPHeader: s.cfg.Headers,
+			HTTPHeader:      s.cfg.Headers,
+			CompressionMode: websocket.CompressionContextTakeover,
 		})
 		if err != nil {
 			if ctx.Err() != nil {
@@ -117,85 +115,22 @@ func (s *ClientService) Start(ctx context.Context) error {
 		s.conn.Store(conn)
 
 		s.logger.Info("connected to wsbridge service")
-
-		var closeErr error
-	readLoop:
-		for {
-			msgType, b, err := conn.Read(ctx)
-			if err != nil {
-				closeErr = fmt.Errorf("could not read message: %w", err)
-				break
-			}
-
-			msg := &wsbridgeproto.WebsocketPacket{}
-			switch msgType {
-			case websocket.MessageText:
-				if err := protojson.Unmarshal(b, msg); err != nil {
-					closeErr = fmt.Errorf("could not unmarshal message: %w", err)
-					break readLoop
-				}
-			default:
-				closeErr = fmt.Errorf("unexpected message type: %v", msgType)
-				break readLoop
-			}
-
+		handleWS(ctx, conn, s.logger, func(msg *wsbridgeproto.WebsocketPacket) error {
 			switch body := msg.Body.(type) {
-			case *wsbridgeproto.WebsocketPacket_Error:
-				s.logger.Warn(
-					"received error message from server",
-					"message", body.Error.Message)
-
-			case *wsbridgeproto.WebsocketPacket_Incoming:
+			case *wsbridgeproto.WebsocketPacket_Message:
 				select {
 				case <-ctx.Done():
-					closeErr = fmt.Errorf("server going away")
-					break readLoop
-				case incomingMsgs <- body.Incoming.Message:
+					return ctx.Err()
+				case incomingMsgs <- body.Message:
+					return nil
 				}
-
 			default:
-				closeErr = fmt.Errorf("unexpected message body: %T", body)
-				break readLoop
+				return fmt.Errorf("unexpected message body: %T", body)
 			}
-		}
-
-		var closeCode websocket.StatusCode
-		var closeReason string
-		switch {
-		case errors.Is(closeErr, io.EOF):
-			closeCode = websocket.StatusNormalClosure
-		case errors.Is(closeErr, ctx.Err()):
-			closeCode = websocket.StatusGoingAway
-			closeReason = "context cancelled"
-		default:
-			closeCode = websocket.StatusProtocolError
-			if closeErr != nil {
-				closeReason = closeErr.Error()
-			}
-		}
-
-		if err := conn.Close(closeCode, closeReason); err != nil {
-			s.logger.Error(
-				"could not close connection",
-				"err", err,
-				"code", closeCode,
-				"reason", closeReason)
-		}
+		})
 	}
 
 	return ctx.Err()
-}
-
-func sleep(ctx context.Context, d time.Duration) error {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
 
 // SendMessage implements [twisms.MessageSender].
