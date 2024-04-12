@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/lmittmann/tint"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
+	"github.com/twipi/twipi/internal/srvutil"
 	"libdb.so/hserve"
 )
 
@@ -30,8 +32,10 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	r := http.NewServeMux()
-	r.Handle("GET /", newWSHandler(logger))
+	r := chi.NewMux()
+	r.Get("/health", srvutil.Respond200)
+	r.Handle("/metrics", promhttp.Handler())
+	r.Handle("/", newWSHandler(logger))
 
 	logger.Info(
 		"starting server",

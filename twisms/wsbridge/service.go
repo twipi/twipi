@@ -12,7 +12,9 @@ import (
 	"nhooyr.io/websocket"
 )
 
-func sendMessage(ctx context.Context, conn *websocket.Conn, msg *twismsproto.Message) error {
+// SendMessage sends a message to the wsbridge Websocket connection in Protobuf
+// format. It sends the WebsocketPacket.send frame.
+func SendMessage(ctx context.Context, conn *websocket.Conn, msg *twismsproto.Message) error {
 	b, err := protojson.Marshal(&wsbridgeproto.WebsocketPacket{
 		Body: &wsbridgeproto.WebsocketPacket_Send{
 			Send: &wsbridgeproto.SendMessage{

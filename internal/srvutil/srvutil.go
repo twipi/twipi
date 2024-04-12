@@ -49,3 +49,8 @@ func (h *headerWriter) Write(b []byte) (int, error) {
 func (h *headerWriter) WriteHeader(status int) {
 	h.status = status
 }
+
+// Respond200 writes a 200 OK response to the writer.
+func Respond200(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}

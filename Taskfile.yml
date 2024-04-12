@@ -10,4 +10,13 @@ includes:
 
 tasks:
   default:
-    deps: [proto:compile]
+    deps: [proto:compile, build-config]
+
+  build-config:
+    watch: true
+    sources:
+      - twid.cfg.nix
+    generates:
+      - twid.json
+    cmds:
+      - nix eval --json -f ./twid.cfg.nix > twid.json

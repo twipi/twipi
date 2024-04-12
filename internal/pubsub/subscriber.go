@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"context"
 	"sync"
 
 	"github.com/twipi/twipi/internal/containerx"
@@ -25,27 +26,24 @@ func NewSubscriber[T any]() *Subscriber[T] {
 }
 
 // Listen starts broadcasting messages received from the given src channel.
-// It blocks until the src channel is closed.
-func (s *Subscriber[T]) Listen(src <-chan T) {
+// It blocks until the src channel is closed or ctx is canceled.
+func (s *Subscriber[T]) Listen(ctx context.Context, src <-chan T) error {
+	s.mu.Lock()
 	if s.subs == nil {
 		s.subs = make(map[chan<- T]pipeSub[T])
 	}
+	s.mu.Unlock()
 
-	for msg := range src {
-		s.publish(msg)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.subs != nil {
-		// Unsubscribe all channels. This will purge them from the map.
-		for ch := range s.subs {
-			s.unsub(ch)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case msg, ok := <-src:
+			if !ok {
+				return nil
+			}
+			s.publish(msg)
 		}
-
-		// Mark as done.
-		s.subs = nil
 	}
 }
 

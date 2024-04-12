@@ -1,0 +1,36 @@
+version: "0.5"
+
+processes:
+  twid:
+    command: go run ./cmd/twid -v -c ./twid.json
+    depends_on:
+      task:
+        condition: process_completed_successfully
+      funnel:
+        condition: process_started
+      sms-bridge-server:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: 8080
+        path: /health
+      period_seconds: 1
+
+  task:
+    command: task
+
+  sms-bridge-server:
+    command: go run ./cmd/sms-wsbridge-server -v -l localhost:8090
+    depends_on:
+      task:
+        condition: process_completed_successfully
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: 8090
+        path: /health
+      period_seconds: 1
+
+  funnel:
+    command: tailscale funnel localhost:8080

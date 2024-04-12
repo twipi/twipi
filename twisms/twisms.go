@@ -2,6 +2,8 @@ package twisms
 
 import (
 	"context"
+	"errors"
+	"regexp"
 
 	"github.com/twipi/twipi/proto/out/twismsproto"
 )
@@ -77,23 +79,29 @@ func ReplyMessage(ctx context.Context, s MessageSender, msg *twismsproto.Message
 	return s.SendMessage(ctx, &reply)
 }
 
-// MessageSubscribeSender is a convenience interface that combines
-// [MessageSubscriber] and [MessageSender].
-type MessageSubscribeSender interface {
+// MessageService describes a service that can both send and receive message
+// events. It is a combination of the two interfaces [MessageSubscriber] and
+// [MessageSender].
+type MessageService interface {
 	MessageSubscriber
 	MessageSender
 }
 
-type combinedMessageSubscribeSender struct {
+type combinedMessageService struct {
 	MessageSubscriber
 	MessageSender
 }
 
-// CombineMessageSubscribeSender combines a [MessageSubscriber] and a
-// [MessageSender] into a single [MessageSubscribeSender].
-func CombineMessageSubscribeSender(sub MessageSubscriber, send MessageSender) MessageSubscribeSender {
-	return &combinedMessageSubscribeSender{
-		MessageSubscriber: sub,
-		MessageSender:     send,
+var e164Re = regexp.MustCompile(`^\+[1-9]\d{1,14}$`)
+
+// ErrInvalidPhoneNumber is returned when the phone number is not in E.164
+// format.
+var ErrInvalidPhoneNumber = errors.New("invalid phone number, must be E.164 format")
+
+// ValidatePhoneNumber validates the given phone number.
+func ValidatePhoneNumber(number string) error {
+	if !e164Re.MatchString(number) {
+		return ErrInvalidPhoneNumber
 	}
+	return nil
 }

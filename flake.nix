@@ -12,7 +12,7 @@
 			});
 			{
 				devShell = mkShell {
-					buildInputs = [
+					packages = [
 						go
 						gopls
 						gotools
@@ -23,7 +23,10 @@
 						protoc-gen-doc
 
 						go-task
+						process-compose
 					];
+
+					PC_PORT_NUM = "38475";
 				};
 			}
 		);
