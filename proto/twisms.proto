@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package twisms;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/twipi/twipi/proto/out/twismsproto";
 
 // A text message.
@@ -10,6 +12,8 @@ message Message {
   string from = 1;
   // The phone number of the recipient.
   string to = 2;
+  // The time the message was sent.
+  google.protobuf.Timestamp timestamp = 4;
   // The body of the message.
   MessageBody body = 3;
 }

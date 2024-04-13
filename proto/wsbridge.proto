@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package wsbridge;
 
+import "google/protobuf/timestamp.proto";
 import "twisms.proto";
 
 option go_package = "github.com/twipi/twipi/proto/out/wsbridgeproto";
@@ -10,9 +11,23 @@ message WebsocketPacket {
   oneof body {
     Error error = 1;
     twisms.Message message = 2;
+    CatchupRequest catchup_request = 3;
+    CatchupResponse catchup_response = 4;
   };
 }
 
 message Error {
   string message = 1;
+}
+
+message CatchupRequest {
+  // The last message timestamp that the client has received.
+  google.protobuf.Timestamp since = 1;
+}
+
+message CatchupResponse {
+  // The messages that the client has missed since the last message.
+  // Although this is not paginated, the work queue may drop messages that are
+  // too old. This list is not guaranteed to be complete.
+  repeated twisms.Message messages = 1;
 }
