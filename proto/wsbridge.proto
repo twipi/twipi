@@ -9,20 +9,25 @@ option go_package = "github.com/twipi/twipi/proto/out/wsbridgeproto";
 
 message WebsocketPacket {
   oneof body {
+    Introduction introduction = 4;
     Error error = 1;
     twisms.Message message = 2;
-    CatchupRequest catchup_request = 3;
-    CatchupResponse catchup_response = 4;
+    CatchupResponse catchup_response = 3;
   };
+}
+
+// The first message that the client sends to the server.
+message Introduction {
+  // The phone numbers that the client is connecting with.
+  // Only messages delivered to this phone number will be sent to the client.
+  repeated string phone_numbers = 1;
+  // The last message timestamp that the client has received.
+  // If present, a CatchupResponse will be sent to the client.
+  optional google.protobuf.Timestamp since = 2;
 }
 
 message Error {
   string message = 1;
-}
-
-message CatchupRequest {
-  // The last message timestamp that the client has received.
-  google.protobuf.Timestamp since = 1;
 }
 
 message CatchupResponse {
