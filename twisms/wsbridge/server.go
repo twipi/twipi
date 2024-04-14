@@ -225,12 +225,19 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 			metadata.canAcknowledge = body.Introduction.CanAcknowledge
 			s.registerClient(conn, metadata)
 
+			// Bind the phone numbers to our logs.
+			logger = logger.With("client_phone_numbers", metadata.phoneNumbers)
+
 			if body.Introduction.Since != nil {
+				logger.Debug(
+					"catching client up to messages",
+					"since", body.Introduction.Since.AsTime())
+
 				var catchupErr error
 				iter := s.queue.RetrieveMessages(ctx, body.Introduction.Since.AsTime(), metadata.phoneNumbers)
 				iter(func(msg *twismsproto.Message, err error) bool {
 					if err != nil {
-						s.logger.Error(
+						logger.Error(
 							"could not retrieve all catchup message",
 							"err", err)
 						catchupErr = errors.New("could not retrieve all catchup messages")
@@ -267,8 +274,8 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 				return ctx.Err()
 
 			case s.msgs <- message:
-				if s.logger.Enabled(ctx, slog.LevelDebug) {
-					s.logger.Debug(
+				if logger.Enabled(ctx, slog.LevelDebug) {
+					logger.Debug(
 						"broadcasted message",
 						"message", message.String(),
 						"sent_at", message.Timestamp.AsTime())
@@ -276,7 +283,7 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if ackID := body.Message.AcknowledgementId; ackID != nil {
-				s.logger.Debug(
+				logger.Debug(
 					"replying with message acknowledgement",
 					"acknowledgement_id", *ackID)
 

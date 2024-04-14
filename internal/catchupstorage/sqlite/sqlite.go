@@ -31,7 +31,7 @@ const pragma = `
 // StorageConfig is the configuration for the "sqlite" storage backend.
 type StorageConfig struct {
 	// Path is the path to/URI for the SQLite database file.
-	Path string `json:"sqlite_path"`
+	Path string `json:"path"`
 	// MaxAge is the maximum age of messages to keep in the database.
 	MaxAge cfgutil.Duration `json:"max_age"`
 }
@@ -44,6 +44,10 @@ type MessageStorage struct {
 
 // NewMessageStorage creates a new SQLite storage backend for the message queue.
 func NewMessageStorage(ctx context.Context, cfg *StorageConfig) (*MessageStorage, error) {
+	if cfg.Path == "" {
+		return nil, fmt.Errorf("sqlite_path is required")
+	}
+
 	db, err := sql.Open("sqlite", cfg.Path)
 	if err != nil {
 		return nil, fmt.Errorf("could not open SQLite database: %w", err)
