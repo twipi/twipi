@@ -217,7 +217,7 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() { s.unregisterClient(conn, metadata) }()
 
 	ctx := r.Context()
-	handleWS(ctx, conn, s.logger, func(msg *wsbridgeproto.WebsocketPacket) error {
+	handleWS(ctx, conn, logger, func(msg *wsbridgeproto.WebsocketPacket) error {
 		switch body := msg.Body.(type) {
 		case *wsbridgeproto.WebsocketPacket_Introduction:
 			// Register the client for global use.
@@ -231,7 +231,8 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if body.Introduction.Since != nil {
 				logger.Debug(
 					"catching client up to messages",
-					"since", body.Introduction.Since.AsTime())
+					"since", body.Introduction.Since.AsTime(),
+					"since_unix", body.Introduction.Since.AsTime().Unix())
 
 				var catchupErr error
 				iter := s.queue.RetrieveMessages(ctx, body.Introduction.Since.AsTime(), metadata.phoneNumbers)
