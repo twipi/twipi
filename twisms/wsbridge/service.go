@@ -49,11 +49,11 @@ func sendError(ctx context.Context, conn *websocket.Conn, message string) error 
 }
 
 func sendPacket(ctx context.Context, conn *websocket.Conn, packet *wsbridgeproto.WebsocketPacket) error {
-	b, err := protojson.Marshal(packet)
+	b, err := proto.Marshal(packet)
 	if err != nil {
 		return fmt.Errorf("could not marshal message as protojson: %w", err)
 	}
-	return conn.Write(ctx, websocket.MessageText, b)
+	return conn.Write(ctx, websocket.MessageBinary, b)
 }
 
 func handleWS(ctx context.Context, conn *websocket.Conn, logger *slog.Logger, onEvent func(*wsbridgeproto.WebsocketPacket) error) {
