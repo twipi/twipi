@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/twipi/cfgutil"
 	"github.com/twipi/twipi/internal/pubsub"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
@@ -44,12 +45,16 @@ type ClientServiceConfig struct {
 	// Headers is the headers to send when connecting to the wsbridge server.
 	// By default, this is empty.
 	Headers http.Header `json:"headers"`
+	// AcknowledgementTimeout is the timeout for message acknowledgements.
+	// If 0, then no acknowledgement is required.
+	AcknowledgementTimeout cfgutil.Duration `json:"acknowledgement_timeout"`
 }
 
 // ClientService wraps a Websocket connection to a wsbridge service.
 type ClientService struct {
 	conn   atomic.Pointer[websocket.Conn]
 	subs   pubsub.Subscriber[*twismsproto.Message]
+	acks   *messageAcks
 	logger *slog.Logger
 	cfg    ClientServiceConfig
 }
@@ -64,6 +69,7 @@ var (
 // The connection is not established until [Start] is called.
 func NewClientService(cfg ClientServiceConfig, logger *slog.Logger) *ClientService {
 	return &ClientService{
+		acks:   newMessageAcks(cfg.AcknowledgementTimeout.AsDuration()),
 		logger: logger,
 		cfg:    cfg,
 	}
@@ -155,10 +161,23 @@ func (s *ClientService) Start(ctx context.Context, opts ClientStartOpts) error {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case incomingMsgs <- body.Message:
-					lastSeen = body.Message.Timestamp.AsTime()
-					return nil
+				case incomingMsgs <- body.Message.Message:
+					lastSeen = body.Message.Message.Timestamp.AsTime()
 				}
+
+				if ackID := body.Message.AcknowledgementId; ackID != nil {
+					if err := sendMessageAcknowledgement(ctx, conn, *ackID); err != nil {
+						return fmt.Errorf("could not send message acknowledgement: %w", err)
+					}
+				}
+
+				return nil
+
+			case *wsbridgeproto.WebsocketPacket_MessageAcknowledgement:
+				if s.acks != nil {
+					s.acks.acknowledge(body.MessageAcknowledgement.AcknowledgementId)
+				}
+				return nil
 
 			default:
 				return fmt.Errorf("unexpected message body: %T", body)
@@ -183,12 +202,31 @@ func (s *ClientService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 		return fmt.Errorf("websocket connection not established")
 	}
 
-	msg = proto.Clone(msg).(*twismsproto.Message)
-	if msg.Timestamp == nil {
-		msg.Timestamp = timestamppb.Now()
+	wsMsg := &wsbridgeproto.Message{
+		Message: proto.Clone(msg).(*twismsproto.Message),
+	}
+	if wsMsg.Message.Timestamp == nil {
+		wsMsg.Message.Timestamp = timestamppb.Now()
 	}
 
-	return SendMessage(ctx, conn, msg)
+	var ackCh <-chan struct{}
+	if s.acks != nil {
+		var ackID string
+		ackID, ackCh = s.acks.generate()
+		wsMsg.AcknowledgementId = &ackID
+	}
+
+	if err := SendMessage(ctx, conn, wsMsg); err != nil {
+		return fmt.Errorf("could not send message: %w", err)
+	}
+
+	if ackCh != nil {
+		if err := s.acks.wait(ctx, ackCh); err != nil {
+			return fmt.Errorf("could not wait for message acknowledgement: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // SubscribeMessages implements [twisms.MessageSubscriber].

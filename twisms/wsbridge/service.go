@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
-	"github.com/twipi/twipi/proto/out/twismsproto"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -19,10 +20,20 @@ import (
 
 // SendMessage sends a message to the wsbridge Websocket connection in Protobuf
 // format. It sends the WebsocketPacket.send frame.
-func SendMessage(ctx context.Context, conn *websocket.Conn, msg *twismsproto.Message) error {
+func SendMessage(ctx context.Context, conn *websocket.Conn, msg *wsbridgeproto.Message) error {
 	return sendPacket(ctx, conn, &wsbridgeproto.WebsocketPacket{
 		Body: &wsbridgeproto.WebsocketPacket_Message{
 			Message: msg,
+		},
+	})
+}
+
+func sendMessageAcknowledgement(ctx context.Context, conn *websocket.Conn, acknowledgementID string) error {
+	return sendPacket(ctx, conn, &wsbridgeproto.WebsocketPacket{
+		Body: &wsbridgeproto.WebsocketPacket_MessageAcknowledgement{
+			MessageAcknowledgement: &wsbridgeproto.MessageAcknowledgement{
+				AcknowledgementId: acknowledgementID,
+			},
 		},
 	})
 }
@@ -73,6 +84,7 @@ readLoop:
 			logger.Warn(
 				"received error message from server",
 				"message", body.Error.Message)
+
 		default:
 			if closeErr = onEvent(msg); closeErr != nil {
 				break readLoop
@@ -114,4 +126,53 @@ func sleep(ctx context.Context, d time.Duration) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+type messageAcks struct {
+	acks    *xsync.MapOf[string, chan struct{}]
+	ackID   atomic.Uint64
+	timeout time.Duration
+}
+
+func newMessageAcks(timeout time.Duration) *messageAcks {
+	if timeout == 0 {
+		return nil
+	}
+	return &messageAcks{
+		acks:    xsync.NewMapOf[string, chan struct{}](),
+		timeout: timeout,
+	}
+}
+
+func (s *messageAcks) generate() (string, <-chan struct{}) {
+	a := s.ackID.Add(1)
+	aID := fmt.Sprintf("ack-%d", a)
+	aCh := make(chan struct{})
+	s.acks.Store(aID, aCh)
+	return aID, aCh
+}
+
+func (s *messageAcks) wait(ctx context.Context, ch <-chan struct{}) error {
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ch:
+		return nil
+	}
+}
+
+func (s *messageAcks) cancel(aID string) {
+	s.acks.Delete(aID)
+}
+
+func (s *messageAcks) acknowledge(aID string) bool {
+	ch, ok := s.acks.LoadAndDelete(aID)
+	if !ok {
+		return false
+	}
+	close(ch)
+	return true
 }

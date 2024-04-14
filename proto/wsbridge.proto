@@ -9,9 +9,10 @@ option go_package = "github.com/twipi/twipi/proto/out/wsbridgeproto";
 
 message WebsocketPacket {
   oneof body {
-    Introduction introduction = 4;
-    Error error = 1;
-    twisms.Message message = 2;
+    Introduction introduction = 1;
+    Error error = 2;
+    Message message = 3;
+    MessageAcknowledgement message_acknowledgement = 5;
   };
 }
 
@@ -27,4 +28,17 @@ message Introduction {
 
 message Error {
   string message = 1;
+}
+
+message Message {
+  // The message being sent.
+  twisms.Message message = 1;
+  // The ID of the message that the client is acknowledging.
+  optional string acknowledgement_id = 2;
+}
+
+message MessageAcknowledgement {
+  // The ID of the message that the client is acknowledging.
+  // The same exact string is echoed back from SendMessage.
+  string acknowledgement_id = 1;
 }

@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/twipi/cfgutil"
 	"github.com/twipi/twipi/internal/catchupstorage"
 	"github.com/twipi/twipi/internal/pubsub"
 	"github.com/twipi/twipi/internal/xcontainer"
@@ -44,6 +46,9 @@ type ServerServiceConfig struct {
 	// MessageQueue is the message queue to use for catchup messages.
 	// If nil, no catchup messages will be sent.
 	MessageQueue *catchupstorage.MessageQueueConfig `json:"message_queue"`
+	// AcknowledgementTimeout is the timeout for message acknowledgements.
+	// If 0, then no acknowledgement is required.
+	AcknowledgementTimeout cfgutil.Duration `json:"acknowledgement_timeout"`
 }
 
 // ServerService wraps a Websocket HTTP handler for the wsbridge server.
@@ -146,6 +151,7 @@ func (s *ServerService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 type serverService struct {
 	*ServerService
 	queue *catchupstorage.MessageQueue
+	acks  *messageAcks
 }
 
 func newServerService(ctx context.Context, h *ServerService) (*serverService, error) {
@@ -165,6 +171,7 @@ func newServerService(ctx context.Context, h *ServerService) (*serverService, er
 	return &serverService{
 		ServerService: h,
 		queue:         queue,
+		acks:          newMessageAcks(h.cfg.AcknowledgementTimeout.AsDuration()),
 	}, nil
 }
 
@@ -215,9 +222,22 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case s.msgs <- body.Message:
-				return nil
+			case s.msgs <- body.Message.Message:
 			}
+
+			if ackID := body.Message.AcknowledgementId; ackID != nil {
+				if err := sendMessageAcknowledgement(ctx, conn, *ackID); err != nil {
+					return fmt.Errorf("could not send message acknowledgement: %w", err)
+				}
+			}
+
+			return nil
+
+		case *wsbridgeproto.WebsocketPacket_MessageAcknowledgement:
+			if s.acks != nil {
+				s.acks.acknowledge(body.MessageAcknowledgement.AcknowledgementId)
+			}
+			return nil
 
 		default:
 			return fmt.Errorf("unexpected message body: %T", body)
@@ -256,21 +276,61 @@ func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
+	// metrics for future use
+	var (
+		clients atomic.Uint64
+		sent    atomic.Uint64
+		acked   atomic.Uint64
+	)
+
 	connMap, _ := s.conns.Load(msg.To)
 	connMap.Range(func(conn *websocket.Conn, _ struct{}) bool {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			clients.Add(1)
 
-			if err := SendMessage(ctx, conn, msg); err != nil {
-				s.logger.Error(
+			wsMsg := &wsbridgeproto.Message{
+				Message: msg,
+			}
+
+			var ackCh <-chan struct{}
+			if s.acks != nil {
+				var ackID string
+				ackID, ackCh = s.acks.generate()
+				wsMsg.AcknowledgementId = &ackID
+			}
+
+			if err := SendMessage(ctx, conn, wsMsg); err != nil {
+				s.logger.Info(
 					"could not deliver message to wsbridge client",
 					"to", msg.To,
 					"err", err)
+				return
+			}
+
+			sent.Add(1)
+
+			if ackCh != nil {
+				if err := s.acks.wait(ctx, ackCh); err != nil {
+					s.logger.Info(
+						"timed out waiting for message acknowledgement",
+						"to", msg.To,
+						"err", err)
+					return
+				}
+				acked.Add(1)
 			}
 		}()
 		return true
 	})
+
+	s.logger.Info(
+		"sent message to wsbridge clients",
+		"to", msg.To,
+		"clients", clients.Load(),
+		"sent", sent.Load(),
+		"acked", acked.Load())
 
 	return nil
 }
