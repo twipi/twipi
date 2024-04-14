@@ -159,7 +159,7 @@ func newServerService(ctx context.Context, h *ServerService) (*serverService, er
 	var queue *catchupstorage.MessageQueue
 	var err error
 
-	if h.cfg.MessageQueue == nil {
+	if h.cfg.MessageQueue != nil {
 		queue, err = catchupstorage.NewMessageQueue(
 			ctx,
 			h.cfg.MessageQueue,
@@ -167,6 +167,7 @@ func newServerService(ctx context.Context, h *ServerService) (*serverService, er
 		if err != nil {
 			return nil, fmt.Errorf("could not create message queue: %w", err)
 		}
+		h.logger.Debug("using message queue")
 	}
 
 	return &serverService{
@@ -238,13 +239,36 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 			return nil
 
 		case *wsbridgeproto.WebsocketPacket_Message:
+			message := body.Message.Message
+
+			// Overriding the message timestamp with the current time.
+			message.Timestamp = timestamppb.Now()
+
+			// Record the message.
+			if s.queue != nil {
+				if err := s.queue.StoreMessage(ctx, message); err != nil {
+					return fmt.Errorf("could not store message in queue: %w", err)
+				}
+			}
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case s.msgs <- body.Message.Message:
+
+			case s.msgs <- message:
+				if s.logger.Enabled(ctx, slog.LevelDebug) {
+					s.logger.Debug(
+						"broadcasted message",
+						"message", message.String(),
+						"sent_at", message.Timestamp.AsTime())
+				}
 			}
 
 			if ackID := body.Message.AcknowledgementId; ackID != nil {
+				s.logger.Debug(
+					"replying with message acknowledgement",
+					"acknowledgement_id", *ackID)
+
 				if err := sendMessageAcknowledgement(ctx, conn, *ackID); err != nil {
 					return fmt.Errorf("could not send message acknowledgement: %w", err)
 				}
@@ -290,8 +314,16 @@ func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 		msg.Timestamp = timestamppb.Now()
 	}
 
-	if err := s.queue.StoreMessage(ctx, msg); err != nil {
-		return fmt.Errorf("could not store message in queue: %w", err)
+	if s.logger.Enabled(ctx, slog.LevelDebug) {
+		s.logger.Debug(
+			"wsbridge server broadcasting message",
+			"message", msg.String())
+	}
+
+	if s.queue != nil {
+		if err := s.queue.StoreMessage(ctx, msg); err != nil {
+			return fmt.Errorf("could not store message in queue: %w", err)
+		}
 	}
 
 	var wg sync.WaitGroup

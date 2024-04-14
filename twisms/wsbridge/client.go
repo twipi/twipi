@@ -158,11 +158,21 @@ func (s *ClientService) Start(ctx context.Context, opts ClientStartOpts) error {
 		handleWS(ctx, conn, s.logger, func(msg *wsbridgeproto.WebsocketPacket) error {
 			switch body := msg.Body.(type) {
 			case *wsbridgeproto.WebsocketPacket_Message:
+				message := body.Message.Message
+
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case incomingMsgs <- body.Message.Message:
-					lastSeen = body.Message.Message.Timestamp.AsTime()
+
+				case incomingMsgs <- message:
+					lastSeen = message.Timestamp.AsTime()
+
+					if s.logger.Enabled(ctx, slog.LevelDebug) {
+						s.logger.Debug(
+							"broadcasted message",
+							"message", message.String(),
+							"sent_at", message.Timestamp.AsTime())
+					}
 				}
 
 				if ackID := body.Message.AcknowledgementId; ackID != nil {
@@ -204,11 +214,19 @@ func (s *ClientService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 		return fmt.Errorf("websocket connection not established")
 	}
 
-	wsMsg := &wsbridgeproto.Message{
-		Message: proto.Clone(msg).(*twismsproto.Message),
+	msg = proto.Clone(msg).(*twismsproto.Message)
+	if msg.Timestamp == nil {
+		msg.Timestamp = timestamppb.Now()
 	}
-	if wsMsg.Message.Timestamp == nil {
-		wsMsg.Message.Timestamp = timestamppb.Now()
+
+	if s.logger.Enabled(ctx, slog.LevelDebug) {
+		s.logger.Debug(
+			"wsbridge sending message",
+			"message", msg.String())
+	}
+
+	wsMsg := &wsbridgeproto.Message{
+		Message: msg,
 	}
 
 	var ackCh <-chan struct{}
