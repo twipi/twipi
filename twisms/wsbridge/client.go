@@ -16,6 +16,7 @@ import (
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
 	"github.com/twipi/twipi/twid"
 	"github.com/twipi/twipi/twisms"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"nhooyr.io/websocket"
 )
 
@@ -67,8 +68,16 @@ func NewClientService(cfg ClientServiceConfig, logger *slog.Logger) *ClientServi
 	}
 }
 
+// ClientStartOpts are options for starting the client service.
+// All properties are optional.
+type ClientStartOpts struct {
+	// LastSeen is the last time the client was seen.
+	// If not zero, the client may receive old messages from the server.
+	LastSeen time.Time
+}
+
 // Start starts the service.
-func (s *ClientService) Start(ctx context.Context) error {
+func (s *ClientService) Start(ctx context.Context, opts ClientStartOpts) error {
 	const retryBackoff = 2 * time.Second
 	const maxBackoff = 30 * time.Second
 	retries := 0
@@ -77,6 +86,7 @@ func (s *ClientService) Start(ctx context.Context) error {
 	defer wg.Wait()
 
 	incomingMsgs := make(chan *twismsproto.Message)
+	lastSeen := opts.LastSeen
 
 	wg.Add(1)
 	go func() {
@@ -85,34 +95,57 @@ func (s *ClientService) Start(ctx context.Context) error {
 	}()
 
 	for ctx.Err() == nil {
-		s.logger.Info("reconnecting wsbridge service connection")
+		s.logger.Info(
+			"reconnecting wsbridge service connection",
+			"retries", retries)
+
+		if retries > 0 {
+			backoff := time.Duration(retries) * retryBackoff
+			s.logger.Debug(
+				"backing off wsbridge",
+				"backoff", backoff)
+
+			if err := sleep(ctx, backoff); err != nil {
+				return err
+			}
+		}
+		retries++
 
 		conn, _, err := websocket.Dial(ctx, s.cfg.WSAddress, &websocket.DialOptions{
 			HTTPHeader:      s.cfg.Headers,
 			CompressionMode: websocket.CompressionContextTakeover,
 		})
 		if err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-
-			retries++
-			backoff := time.Duration(retries) * retryBackoff
-
 			s.logger.Error(
 				"could not dial wsbridge service, retrying",
-				"err", err,
-				"retries", retries,
-				"backoff", backoff)
+				"err", err)
+			continue
+		}
 
-			if err := sleep(ctx, backoff); err != nil {
-				return err
-			}
+		var sincepb *timestamppb.Timestamp
+		if !lastSeen.IsZero() {
+			sincepb = timestamppb.New(lastSeen)
+		}
+
+		if err := sendPacket(ctx, conn, &wsbridgeproto.WebsocketPacket{
+			Body: &wsbridgeproto.WebsocketPacket_Introduction{
+				Introduction: &wsbridgeproto.Introduction{
+					PhoneNumbers: s.cfg.PhoneNumbers,
+					Since:        sincepb,
+				},
+			},
+		}); err != nil {
+			s.logger.Error(
+				"could not send introduction to wsbridge service",
+				"err", err)
 			continue
 		}
 
 		// Replace the current connection.
 		s.conn.Store(conn)
+
+		// Reset the retries counter.
+		retries = 0
 
 		s.logger.Info("connected to wsbridge service")
 		handleWS(ctx, conn, s.logger, func(msg *wsbridgeproto.WebsocketPacket) error {
@@ -122,12 +155,28 @@ func (s *ClientService) Start(ctx context.Context) error {
 				case <-ctx.Done():
 					return ctx.Err()
 				case incomingMsgs <- body.Message:
-					return nil
+					lastSeen = body.Message.Timestamp.AsTime()
 				}
+				return nil
+
+			case *wsbridgeproto.WebsocketPacket_CatchupResponse:
+				for _, msg := range body.CatchupResponse.Messages {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case incomingMsgs <- msg:
+						lastSeen = msg.Timestamp.AsTime()
+					}
+				}
+				return nil
+
 			default:
 				return fmt.Errorf("unexpected message body: %T", body)
 			}
 		})
+
+		// Drop the connection.
+		s.conn.Store(nil)
 	}
 
 	return ctx.Err()
@@ -141,8 +190,9 @@ func (s *ClientService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 
 	conn := s.conn.Load()
 	if conn == nil {
-		return fmt.Errorf("service not started")
+		return fmt.Errorf("websocket connection not established")
 	}
+
 	return SendMessage(ctx, conn, msg)
 }
 

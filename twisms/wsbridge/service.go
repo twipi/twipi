@@ -20,11 +20,15 @@ import (
 // SendMessage sends a message to the wsbridge Websocket connection in Protobuf
 // format. It sends the WebsocketPacket.send frame.
 func SendMessage(ctx context.Context, conn *websocket.Conn, msg *twismsproto.Message) error {
-	b, err := protojson.Marshal(&wsbridgeproto.WebsocketPacket{
+	return sendPacket(ctx, conn, &wsbridgeproto.WebsocketPacket{
 		Body: &wsbridgeproto.WebsocketPacket_Message{
 			Message: msg,
 		},
 	})
+}
+
+func sendPacket(ctx context.Context, conn *websocket.Conn, packet *wsbridgeproto.WebsocketPacket) error {
+	b, err := protojson.Marshal(packet)
 	if err != nil {
 		return fmt.Errorf("could not marshal message as protojson: %w", err)
 	}
