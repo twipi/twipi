@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twid/config"
@@ -30,20 +28,11 @@ func RegisterTwismsModule(module TwismsModule) {
 	twismsModules[module.Name] = module
 }
 
-type twismsOutput struct {
-	services []twisms.MessageService
-	handlers []http.Handler
-	starters []Starter
-	closers  []io.Closer
-}
-
-func initializeTwismsService(cfg config.Root, logger *slog.Logger) (*twismsOutput, error) {
-	var output twismsOutput
-
+func initializeTwisms(cfg config.Root, services *initializedServices, logger *slog.Logger) error {
 	for _, serviceCfg := range cfg.Twisms.Services {
 		module, ok := twismsModules[serviceCfg.Module]
 		if !ok {
-			return nil, fmt.Errorf("unknown twisms module %s", serviceCfg.Module)
+			return fmt.Errorf("unknown twisms module %s", serviceCfg.Module)
 		}
 
 		logger := logger.With("twisms_module", module.Name)
@@ -53,25 +42,14 @@ func initializeTwismsService(cfg config.Root, logger *slog.Logger) (*twismsOutpu
 
 		service, err := module.New(serviceCfgRaw, logger)
 		if err != nil {
-			return nil, fmt.Errorf("cannot create twisms service: %w", err)
+			return fmt.Errorf("cannot create twisms service: %w", err)
 		}
 
-		output.services = append(output.services, service)
-
-		if h, ok := service.(http.Handler); ok {
-			output.handlers = append(output.handlers, h)
-		}
-
-		if s, ok := service.(Starter); ok {
-			output.starters = append(output.starters, s)
-		}
-
-		if c, ok := service.(io.Closer); ok {
-			output.closers = append(output.closers, c)
-		}
+		services.twisms = append(services.twisms, service)
+		services.add(service)
 	}
 
-	return &output, nil
+	return nil
 }
 
 type twismsWrapper struct {
