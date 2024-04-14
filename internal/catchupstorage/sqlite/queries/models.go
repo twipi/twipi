@@ -8,6 +8,7 @@ import ()
 
 type Message struct {
 	ID           int64
+	FromNumber   string
 	ToNumber     string
 	CreatedAt    int64
 	ProtobufData []byte

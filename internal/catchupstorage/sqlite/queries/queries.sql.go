@@ -11,32 +11,40 @@ import (
 )
 
 const insertMessage = `-- name: InsertMessage :exec
-INSERT INTO messages (to_number, created_at, protobuf_data) VALUES (?, ?, ?)
+INSERT INTO messages (from_number, to_number, created_at, protobuf_data) VALUES (?, ?, ?, ?)
 `
 
 type InsertMessageParams struct {
+	FromNumber   string
 	ToNumber     string
 	CreatedAt    int64
 	ProtobufData []byte
 }
 
 func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) error {
-	_, err := q.db.ExecContext(ctx, insertMessage, arg.ToNumber, arg.CreatedAt, arg.ProtobufData)
+	_, err := q.db.ExecContext(ctx, insertMessage,
+		arg.FromNumber,
+		arg.ToNumber,
+		arg.CreatedAt,
+		arg.ProtobufData,
+	)
 	return err
 }
 
 const messagesAfter = `-- name: MessagesAfter :many
-SELECT id, to_number, created_at, protobuf_data FROM messages WHERE
-	id >= ? AND
+SELECT id, from_number, to_number, created_at, protobuf_data FROM messages WHERE
+	id > ? AND
 	created_at >= ?
-	AND to_number IN (/*SLICE:to_numbers*/?)
+	AND (from_number IN (/*SLICE:from_numbers*/?) OR to_number IN (/*SLICE:to_numbers*/?))
+ORDER BY id ASC
 LIMIT 100
 `
 
 type MessagesAfterParams struct {
-	ID        int64
-	CreatedAt int64
-	ToNumbers []string
+	ID          int64
+	CreatedAt   int64
+	FromNumbers []string
+	ToNumbers   []string
 }
 
 func (q *Queries) MessagesAfter(ctx context.Context, arg MessagesAfterParams) ([]Message, error) {
@@ -44,6 +52,14 @@ func (q *Queries) MessagesAfter(ctx context.Context, arg MessagesAfterParams) ([
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.ID)
 	queryParams = append(queryParams, arg.CreatedAt)
+	if len(arg.FromNumbers) > 0 {
+		for _, v := range arg.FromNumbers {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:from_numbers*/?", strings.Repeat(",?", len(arg.FromNumbers))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:from_numbers*/?", "NULL", 1)
+	}
 	if len(arg.ToNumbers) > 0 {
 		for _, v := range arg.ToNumbers {
 			queryParams = append(queryParams, v)
@@ -62,6 +78,7 @@ func (q *Queries) MessagesAfter(ctx context.Context, arg MessagesAfterParams) ([
 		var i Message
 		if err := rows.Scan(
 			&i.ID,
+			&i.FromNumber,
 			&i.ToNumber,
 			&i.CreatedAt,
 			&i.ProtobufData,

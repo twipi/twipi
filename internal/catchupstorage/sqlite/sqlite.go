@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	_ "embed"
@@ -38,12 +39,13 @@ type StorageConfig struct {
 
 // MessageStorage is the SQLite storage backend for the message queue.
 type MessageStorage struct {
-	db *sql.DB
-	q  *queries.Queries
+	db     *sql.DB
+	q      *queries.Queries
+	logger *slog.Logger
 }
 
 // NewMessageStorage creates a new SQLite storage backend for the message queue.
-func NewMessageStorage(ctx context.Context, cfg *StorageConfig) (*MessageStorage, error) {
+func NewMessageStorage(ctx context.Context, cfg *StorageConfig, logger *slog.Logger) (*MessageStorage, error) {
 	if cfg.Path == "" {
 		return nil, fmt.Errorf("sqlite_path is required")
 	}
@@ -62,8 +64,9 @@ func NewMessageStorage(ctx context.Context, cfg *StorageConfig) (*MessageStorage
 	}
 
 	return &MessageStorage{
-		db: db,
-		q:  queries.New(db),
+		db:     db,
+		q:      queries.New(db),
+		logger: logger,
 	}, nil
 }
 
@@ -71,19 +74,30 @@ func (s *MessageStorage) Close() error {
 	return s.db.Close()
 }
 
-func (s *MessageStorage) RetrieveMessages(ctx context.Context, since time.Time, toNumbers []string) xiter.Seq2[*twismsproto.Message, error] {
+func (s *MessageStorage) RetrieveMessages(ctx context.Context, since time.Time, numbers []string) xiter.Seq2[*twismsproto.Message, error] {
 	return func(yield func(*twismsproto.Message, error) bool) bool {
 		var nextID int64
 		for ctx.Err() == nil {
-			rows, err := s.q.MessagesAfter(ctx, queries.MessagesAfterParams{
-				ID:        nextID,
-				CreatedAt: since.Unix(),
-				ToNumbers: toNumbers,
-			})
+			params := queries.MessagesAfterParams{
+				ID:          nextID,
+				CreatedAt:   since.Unix(),
+				FromNumbers: numbers,
+				ToNumbers:   numbers,
+			}
+
+			s.logger.Debug(
+				"retrieving messages from db",
+				"params", params)
+
+			rows, err := s.q.MessagesAfter(ctx, params)
 			if err != nil {
 				yield(nil, fmt.Errorf("could not query messages: %w", err))
 				return false
 			}
+
+			s.logger.Debug(
+				"retrieved messages from db",
+				"count", len(rows))
 
 			if len(rows) == 0 {
 				return true
@@ -119,6 +133,7 @@ func (s *MessageStorage) StoreMessage(ctx context.Context, msg *twismsproto.Mess
 	}
 
 	if err := s.q.InsertMessage(ctx, queries.InsertMessageParams{
+		FromNumber:   msg.From,
 		ToNumber:     msg.To,
 		CreatedAt:    msg.Timestamp.AsTime().Unix(),
 		ProtobufData: data,

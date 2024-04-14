@@ -43,14 +43,17 @@ func NewMessageQueue(ctx context.Context, cfg *MessageQueueConfig, logger *slog.
 
 	switch {
 	case cfg.SQLite != nil:
-		storer, err = sqlite.NewMessageStorage(ctx, cfg.SQLite)
-		if err != nil {
-			return nil, fmt.Errorf("could not create SQLite message storage: %w", err)
-		}
 		logger = logger.With(
 			"message_storage", "sqlite",
 			"message_storage.sqlite_path", cfg.SQLite.Path)
+
+		storer, err = sqlite.NewMessageStorage(ctx, cfg.SQLite, logger)
+		if err != nil {
+			return nil, fmt.Errorf("could not create SQLite message storage: %w", err)
+		}
+
 		logger.Info("created SQLite message storage")
+
 	default:
 		return nil, fmt.Errorf("no storage backend configured")
 	}
@@ -71,8 +74,8 @@ func (mq *MessageQueue) Close() error {
 	return nil
 }
 
-func (mq *MessageQueue) RetrieveMessages(ctx context.Context, since time.Time, toNumbers []string) xiter.Seq2[*twismsproto.Message, error] {
-	return mq.storer.RetrieveMessages(ctx, since, toNumbers)
+func (mq *MessageQueue) RetrieveMessages(ctx context.Context, since time.Time, numbers []string) xiter.Seq2[*twismsproto.Message, error] {
+	return mq.storer.RetrieveMessages(ctx, since, numbers)
 }
 
 func (mq *MessageQueue) StoreMessage(ctx context.Context, msg *twismsproto.Message) error {
