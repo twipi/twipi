@@ -9,7 +9,6 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twipi/twipi/internal/catchupstorage"
 	"github.com/twipi/twipi/internal/pubsub"
@@ -42,8 +41,6 @@ func init() {
 type ServerServiceConfig struct {
 	// PhoneNumbers is the list of phone numbers managed by this service.
 	PhoneNumbers []string `json:"phone_numbers"`
-	// WSPath is the path that the WS handler will be mounted on.
-	WSPath string `json:"ws_path"`
 	// MessageQueue is the message queue to use for catchup messages.
 	// If nil, no catchup messages will be sent.
 	MessageQueue *catchupstorage.MessageQueueConfig `json:"message_queue"`
@@ -117,7 +114,7 @@ func (s *ServerService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	hh.router.ServeHTTP(w, r)
+	hh.wsHandler(w, r)
 }
 
 // SubscribeMessages implements [twisms.MessageSubscriber].
@@ -148,8 +145,7 @@ func (s *ServerService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 
 type serverService struct {
 	*ServerService
-	router *chi.Mux
-	queue  *catchupstorage.MessageQueue
+	queue *catchupstorage.MessageQueue
 }
 
 func newServerService(ctx context.Context, h *ServerService) (*serverService, error) {
@@ -166,14 +162,10 @@ func newServerService(ctx context.Context, h *ServerService) (*serverService, er
 		}
 	}
 
-	hh := &serverService{
+	return &serverService{
 		ServerService: h,
-		router:        chi.NewMux(),
 		queue:         queue,
-	}
-	hh.router.Get(h.cfg.WSPath, hh.wsHandler)
-
-	return hh, nil
+	}, nil
 }
 
 func (s *serverService) Close() error {
@@ -185,7 +177,8 @@ func (s *serverService) Close() error {
 
 func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		CompressionMode: websocket.CompressionContextTakeover,
+		CompressionMode:    websocket.CompressionContextTakeover,
+		InsecureSkipVerify: true,
 	})
 	if err != nil {
 		s.logger.Error(

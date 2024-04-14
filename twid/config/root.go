@@ -20,7 +20,13 @@ type Twisms struct {
 // The user must specify the module name and the configuration for that module
 // in the same JSON object.
 type TwismsService struct {
+	// Module is the name of the Twisms module.
+	// It must be registered with [twid.RegisterTwismsModule].
 	Module string `json:"module"`
+	// HTTPPath is the path that the HTTP handler will be mounted on.
+	// If empty, the service will not get routed, even if it provides an HTTP
+	// handler.
+	HTTPPath string `json:"http_path,omitempty"`
 
 	raw json.RawMessage
 }

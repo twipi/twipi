@@ -45,8 +45,11 @@ func initializeTwisms(cfg config.Root, services *initializedServices, logger *sl
 			return fmt.Errorf("cannot create twisms service: %w", err)
 		}
 
+		if err := services.add(service, serviceCfg, logger); err != nil {
+			return fmt.Errorf("cannot add twisms service: %w", err)
+		}
+
 		services.twisms = append(services.twisms, service)
-		services.add(service)
 	}
 
 	return nil

@@ -20,7 +20,13 @@ import (
 func Start(ctx context.Context, cfg config.Root, logger *slog.Logger) error {
 	errg, ctx := errgroup.WithContext(ctx)
 
-	services := &initializedServices{}
+	router := chi.NewMux()
+	router.Get("/health", srvutil.Respond200)
+	router.Mount("/metrics", promhttp.Handler())
+
+	services := &initializedServices{
+		router: router,
+	}
 	defer func() { closeAll(logger, services.closers...) }()
 
 	if err := initializeTwisms(cfg, services, logger); err != nil {
@@ -33,13 +39,9 @@ func Start(ctx context.Context, cfg config.Root, logger *slog.Logger) error {
 	}
 
 	errg.Go(func() error {
-		httpRoutes := chi.NewMux()
-		httpRoutes.Get("/health", srvutil.Respond200)
-		httpRoutes.Handle("/metrics", promhttp.Handler())
-		httpRoutes.Handle("/", srvutil.TryHandlers(services.handlers...))
 
 		logger.Info("starting HTTP server", "addr", cfg.ListenAddr)
-		if err := hserve.ListenAndServe(ctx, cfg.ListenAddr, httpRoutes); err != nil {
+		if err := hserve.ListenAndServe(ctx, cfg.ListenAddr, router); err != nil {
 			slog.Error(
 				"failed to start HTTP server",
 				"addr", cfg.ListenAddr,
@@ -53,22 +55,41 @@ func Start(ctx context.Context, cfg config.Root, logger *slog.Logger) error {
 }
 
 type initializedServices struct {
+	router   *chi.Mux
 	twisms   []twisms.MessageService
-	handlers []http.Handler
 	starters []Starter
 	closers  []io.Closer
 }
 
-func (s *initializedServices) add(service any) {
+func (s *initializedServices) add(service any, cfg config.TwismsService, logger *slog.Logger) (err error) {
 	if v, ok := service.(http.Handler); ok {
-		s.handlers = append(s.handlers, v)
+		if cfg.HTTPPath == "" {
+			logger.Warn("service implements http.Handler but has no HTTP path")
+		} else {
+			logger.Debug("adding HTTP handler", "path", cfg.HTTPPath)
+			(func() {
+				// Handle chi's panic.
+				defer func() {
+					if r := recover(); r != nil {
+						err = fmt.Errorf("%v", r)
+					}
+				}()
+				s.router.Mount(cfg.HTTPPath, v)
+			})()
+		}
 	}
+
 	if v, ok := service.(Starter); ok {
+		logger.Debug("adding starter")
 		s.starters = append(s.starters, v)
 	}
+
 	if v, ok := service.(io.Closer); ok {
+		logger.Debug("adding closer")
 		s.closers = append(s.closers, v)
 	}
+
+	return nil
 }
 
 func closeAll(logger *slog.Logger, closers ...io.Closer) {

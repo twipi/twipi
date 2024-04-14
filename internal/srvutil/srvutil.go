@@ -1,6 +1,8 @@
 package srvutil
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // ParseForm is a middleware that calls ParseForm before the handler is called.
 func ParseForm(next http.Handler) http.Handler {
@@ -21,7 +23,7 @@ func TryHandlers(handlers ...http.Handler) http.Handler {
 		for _, h := range handlers {
 			hw := &headerWriter{w: w}
 			h.ServeHTTP(hw, r)
-			if hw.status != 404 {
+			if !hw.notFound {
 				return
 			}
 		}
@@ -30,8 +32,8 @@ func TryHandlers(handlers ...http.Handler) http.Handler {
 }
 
 type headerWriter struct {
-	w      http.ResponseWriter
-	status int
+	w        http.ResponseWriter
+	notFound bool
 }
 
 func (h *headerWriter) Header() http.Header {
@@ -39,7 +41,7 @@ func (h *headerWriter) Header() http.Header {
 }
 
 func (h *headerWriter) Write(b []byte) (int, error) {
-	if h.status == 404 {
+	if h.notFound {
 		// prevent writing a body for 404 responses
 		return len(b), nil
 	}
@@ -47,7 +49,11 @@ func (h *headerWriter) Write(b []byte) (int, error) {
 }
 
 func (h *headerWriter) WriteHeader(status int) {
-	h.status = status
+	if status == http.StatusNotFound {
+		h.notFound = true
+		return
+	}
+	h.w.WriteHeader(status)
 }
 
 // Respond200 writes a 200 OK response to the writer.

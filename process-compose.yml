@@ -2,7 +2,7 @@ version: "0.5"
 
 processes:
   twid:
-    command: go run ./cmd/twid -v -c ./twid.json
+    command: go run ./cmd/twid -vvv -c ./twid.json
     depends_on:
       task:
         condition: process_completed_successfully

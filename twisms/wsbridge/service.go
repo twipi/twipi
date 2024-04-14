@@ -62,6 +62,12 @@ readLoop:
 			break readLoop
 		}
 
+		if logger.Enabled(ctx, slog.LevelDebug) {
+			logger.Debug(
+				"wsbridge received message",
+				"message", msg.String())
+		}
+
 		switch body := msg.Body.(type) {
 		case *wsbridgeproto.WebsocketPacket_Error:
 			logger.Warn(
