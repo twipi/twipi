@@ -38,6 +38,16 @@ func sendMessageAcknowledgement(ctx context.Context, conn *websocket.Conn, ackno
 	})
 }
 
+func sendError(ctx context.Context, conn *websocket.Conn, message string) error {
+	return sendPacket(ctx, conn, &wsbridgeproto.WebsocketPacket{
+		Body: &wsbridgeproto.WebsocketPacket_Error{
+			Error: &wsbridgeproto.Error{
+				Message: message,
+			},
+		},
+	})
+}
+
 func sendPacket(ctx context.Context, conn *websocket.Conn, packet *wsbridgeproto.WebsocketPacket) error {
 	b, err := protojson.Marshal(packet)
 	if err != nil {

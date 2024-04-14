@@ -175,7 +175,9 @@ func (s *ClientService) Start(ctx context.Context, opts ClientStartOpts) error {
 
 			case *wsbridgeproto.WebsocketPacket_MessageAcknowledgement:
 				if s.acks != nil {
-					s.acks.acknowledge(body.MessageAcknowledgement.AcknowledgementId)
+					if !s.acks.acknowledge(body.MessageAcknowledgement.AcknowledgementId) {
+						sendError(ctx, conn, "unknown acknowledgement ID")
+					}
 				}
 				return nil
 

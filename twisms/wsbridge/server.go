@@ -3,6 +3,7 @@ package wsbridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -213,7 +214,25 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 			s.registerConn(conn, phoneNumbers)
 
 			if body.Introduction.Since != nil {
-				// TODO: Implement this
+				var catchupErr error
+				iter := s.queue.RetrieveMessages(ctx, body.Introduction.Since.AsTime(), phoneNumbers)
+				iter(func(msg *twismsproto.Message, err error) bool {
+					if err != nil {
+						s.logger.Error(
+							"could not retrieve all catchup message",
+							"err", err)
+						catchupErr = errors.New("could not retrieve all catchup messages")
+						return false
+					}
+
+					err = SendMessage(ctx, conn, &wsbridgeproto.Message{
+						Message: msg,
+					})
+					return err == nil
+				})
+				if catchupErr != nil {
+					sendError(ctx, conn, catchupErr.Error())
+				}
 			}
 
 			return nil
@@ -235,7 +254,9 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 		case *wsbridgeproto.WebsocketPacket_MessageAcknowledgement:
 			if s.acks != nil {
-				s.acks.acknowledge(body.MessageAcknowledgement.AcknowledgementId)
+				if !s.acks.acknowledge(body.MessageAcknowledgement.AcknowledgementId) {
+					sendError(ctx, conn, "unknown acknowledgement ID")
+				}
 			}
 			return nil
 
