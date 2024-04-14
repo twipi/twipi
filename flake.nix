@@ -22,6 +22,7 @@
 						protoc-gen-go
 						protoc-gen-doc
 
+						sqlc
 						go-task
 						process-compose
 					];

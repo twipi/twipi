@@ -1,0 +1,16 @@
+{
+  "version": "2",
+  "sql": [
+    {
+      "schema": "internal/catchupstorage/sqlite/schema.sql",
+      "queries": "internal/catchupstorage/sqlite/queries.sql",
+      "engine": "sqlite",
+      "gen": {
+        "go": {
+          "package": "queries",
+          "out": "internal/catchupstorage/sqlite/queries"
+        }
+      }
+    }
+  ]
+}

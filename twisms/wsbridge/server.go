@@ -11,11 +11,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/twipi/twipi/internal/catchupstorage"
 	"github.com/twipi/twipi/internal/pubsub"
+	"github.com/twipi/twipi/internal/xcontainer"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
 	"github.com/twipi/twipi/twid"
 	"github.com/twipi/twipi/twisms"
+	"golang.org/x/sync/errgroup"
 	"nhooyr.io/websocket"
 )
 
@@ -39,16 +42,20 @@ type ServerServiceConfig struct {
 	PhoneNumbers []string `json:"phone_numbers"`
 	// WSPath is the path that the WS handler will be mounted on.
 	WSPath string `json:"ws_path"`
+	// MessageQueue is the message queue to use for catchup messages.
+	// If nil, no catchup messages will be sent.
+	MessageQueue *catchupstorage.MessageQueueConfig `json:"message_queue"`
 }
 
 // ServerService wraps a Websocket HTTP handler for the wsbridge server.
 type ServerService struct {
-	subs   pubsub.Subscriber[*twismsproto.Message]
-	msgs   chan *twismsproto.Message
-	conns  *xsync.MapOf[string, *xsync.MapOf[*websocket.Conn, struct{}]] // phone number -> conn
-	logger *slog.Logger
-	router *chi.Mux
-	cfg    ServerServiceConfig
+	subs    pubsub.Subscriber[*twismsproto.Message]
+	msgs    chan *twismsproto.Message
+	ready   chan struct{}
+	service *xcontainer.Signaled[*serverService]
+	conns   *xsync.MapOf[string, *xsync.MapOf[*websocket.Conn, struct{}]] // phone number -> conn
+	logger  *slog.Logger
+	cfg     ServerServiceConfig
 }
 
 var (
@@ -60,33 +67,121 @@ var (
 
 // NewServerService creates a new Service using the given Websocket address.
 func NewServerService(cfg ServerServiceConfig, logger *slog.Logger) *ServerService {
-	s := &ServerService{
-		msgs:   make(chan *twismsproto.Message),
-		conns:  xsync.NewMapOf[string, *xsync.MapOf[*websocket.Conn, struct{}]](),
-		logger: logger,
-		router: chi.NewMux(),
-		cfg:    cfg,
+	return &ServerService{
+		msgs:    make(chan *twismsproto.Message),
+		ready:   make(chan struct{}),
+		service: xcontainer.NewSignaled[*serverService](),
+		conns:   xsync.NewMapOf[string, *xsync.MapOf[*websocket.Conn, struct{}]](),
+		logger:  logger,
+		cfg:     cfg,
 	}
-	s.router.Get(cfg.WSPath, s.wsHandler)
-	return s
-}
-
-func newWSHandler(logger *slog.Logger) http.Handler {
-	return &ServerService{logger: logger}
 }
 
 // Start implements [twid.Starter].
-func (h *ServerService) Start(ctx context.Context) error {
-	h.subs.Listen(ctx, h.msgs)
-	return ctx.Err()
+func (s *ServerService) Start(ctx context.Context) error {
+	errg, ctx := errgroup.WithContext(ctx)
+
+	errg.Go(func() error {
+		s.subs.Listen(ctx, s.msgs)
+		return ctx.Err()
+	})
+
+	errg.Go(func() error {
+		ss, err := newServerService(ctx, s)
+		if err != nil {
+			s.logger.Error(
+				"could not finish creating the server service",
+				"err", err)
+			return fmt.Errorf("could not create server service: %w", err)
+		}
+
+		s.service.Signal(ss)
+
+		<-ctx.Done()
+		if err := ss.Close(); err != nil {
+			return err
+		}
+
+		return ctx.Err()
+	})
+
+	return errg.Wait()
 }
 
 // ServeHTTP implements [http.Handler].
-func (h *ServerService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.router.ServeHTTP(w, r)
+func (s *ServerService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	hh, ok := s.service.Value()
+	if !ok {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	hh.router.ServeHTTP(w, r)
 }
 
-func (s *ServerService) wsHandler(w http.ResponseWriter, r *http.Request) {
+// SubscribeMessages implements [twisms.MessageSubscriber].
+func (s *ServerService) SubscribeMessages(ch chan<- *twismsproto.Message, filters *twismsproto.MessageFilters) {
+	s.subs.Subscribe(ch, func(msg *twismsproto.Message) bool {
+		return twisms.FilterMessage(filters, msg)
+	})
+}
+
+// UnsubscribeMessages implements [twisms.MessageSubscriber].
+func (s *ServerService) UnsubscribeMessages(ch chan<- *twismsproto.Message) {
+	s.subs.Unsubscribe(ch)
+}
+
+// SendMessage implements [twisms.MessageSender].
+func (s *ServerService) SendMessage(ctx context.Context, msg *twismsproto.Message) error {
+	if !slices.Contains(s.cfg.PhoneNumbers, msg.From) {
+		return fmt.Errorf("unknown phone number %q to send from", msg.From)
+	}
+
+	ss, err := s.service.Wait(ctx)
+	if err != nil {
+		return err
+	}
+
+	return ss.SendMessage(ctx, msg)
+}
+
+type serverService struct {
+	*ServerService
+	router *chi.Mux
+	queue  *catchupstorage.MessageQueue
+}
+
+func newServerService(ctx context.Context, h *ServerService) (*serverService, error) {
+	var queue *catchupstorage.MessageQueue
+	var err error
+
+	if h.cfg.MessageQueue == nil {
+		queue, err = catchupstorage.NewMessageQueue(
+			ctx,
+			h.cfg.MessageQueue,
+			h.logger.With("module", "wsbridge_server.message_queue"))
+		if err != nil {
+			return nil, fmt.Errorf("could not create message queue: %w", err)
+		}
+	}
+
+	hh := &serverService{
+		ServerService: h,
+		router:        chi.NewMux(),
+		queue:         queue,
+	}
+	hh.router.Get(h.cfg.WSPath, hh.wsHandler)
+
+	return hh, nil
+}
+
+func (s *serverService) Close() error {
+	if err := s.queue.Close(); err != nil {
+		return fmt.Errorf("could not close message queue: %w", err)
+	}
+	return nil
+}
+
+func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		CompressionMode: websocket.CompressionContextTakeover,
 	})
@@ -163,10 +258,9 @@ func (s *ServerService) unregisterConn(conn *websocket.Conn, phoneNumbers []stri
 	}
 }
 
-// SendMessage implements [twisms.MessageSender].
-func (s *ServerService) SendMessage(ctx context.Context, msg *twismsproto.Message) error {
-	if !slices.Contains(s.cfg.PhoneNumbers, msg.From) {
-		return fmt.Errorf("unknown phone number %q to send from", msg.From)
+func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Message) error {
+	if err := s.queue.StoreMessage(ctx, msg); err != nil {
+		return fmt.Errorf("could not store message in queue: %w", err)
 	}
 
 	var wg sync.WaitGroup
@@ -189,16 +283,4 @@ func (s *ServerService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 	})
 
 	return nil
-}
-
-// SubscribeMessages implements [twisms.MessageSubscriber].
-func (s *ServerService) SubscribeMessages(ch chan<- *twismsproto.Message, filters *twismsproto.MessageFilters) {
-	s.subs.Subscribe(ch, func(msg *twismsproto.Message) bool {
-		return twisms.FilterMessage(filters, msg)
-	})
-}
-
-// UnsubscribeMessages implements [twisms.MessageSubscriber].
-func (s *ServerService) UnsubscribeMessages(ch chan<- *twismsproto.Message) {
-	s.subs.Unsubscribe(ch)
 }

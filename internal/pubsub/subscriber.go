@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/twipi/twipi/internal/containerx"
+	"github.com/twipi/twipi/internal/xcontainer"
 )
 
 // Subscriber is a subscriber that subscribes to a Pipe. A zero-value Subscriber
@@ -91,7 +91,7 @@ func (s *Subscriber[T]) Subscribe(ch chan<- T, filter FilterFunc[T]) {
 
 	go func() {
 		var dst chan<- T
-		var pending containerx.Queue[T]
+		var pending xcontainer.Queue[T]
 
 		for {
 			select {

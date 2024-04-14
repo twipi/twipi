@@ -10,7 +10,11 @@ includes:
 
 tasks:
   default:
-    deps: [proto:compile, build-config]
+    deps: [proto:compile, sqlc, build-config]
+
+  sqlc:
+    cmds:
+      - sqlc generate
 
   build-config:
     watch: true

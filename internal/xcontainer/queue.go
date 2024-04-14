@@ -1,4 +1,4 @@
-package containerx
+package xcontainer
 
 // Queue is a FIFO queue.
 type Queue[T any] struct {
