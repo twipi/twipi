@@ -28,12 +28,10 @@ func SendMessage(ctx context.Context, conn *websocket.Conn, msg *wsbridgeproto.M
 	})
 }
 
-func sendMessageAcknowledgement(ctx context.Context, conn *websocket.Conn, acknowledgementID string) error {
+func sendMessageAcknowledgement(ctx context.Context, conn *websocket.Conn, acknowledgement *wsbridgeproto.MessageAcknowledgement) error {
 	return sendPacket(ctx, conn, &wsbridgeproto.WebsocketPacket{
 		Body: &wsbridgeproto.WebsocketPacket_MessageAcknowledgement{
-			MessageAcknowledgement: &wsbridgeproto.MessageAcknowledgement{
-				AcknowledgementId: acknowledgementID,
-			},
+			MessageAcknowledgement: acknowledgement,
 		},
 	})
 }

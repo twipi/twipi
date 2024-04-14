@@ -52,15 +52,25 @@ type ServerServiceConfig struct {
 	AcknowledgementTimeout cfgutil.Duration `json:"acknowledgement_timeout"`
 }
 
+type (
+	wsConnMap  = xsync.MapOf[*websocket.Conn, clientMetadata]
+	wsPhoneMap = xsync.MapOf[string, *wsConnMap]
+)
+
 // ServerService wraps a Websocket HTTP handler for the wsbridge server.
 type ServerService struct {
 	subs    pubsub.Subscriber[*twismsproto.Message]
 	msgs    chan *twismsproto.Message
 	ready   chan struct{}
 	service *xcontainer.Signaled[*serverService]
-	conns   *xsync.MapOf[string, *xsync.MapOf[*websocket.Conn, struct{}]] // phone number -> conn
+	conns   *wsPhoneMap // phone number -> conn
 	logger  *slog.Logger
 	cfg     ServerServiceConfig
+}
+
+type clientMetadata struct {
+	phoneNumbers   []string
+	canAcknowledge bool
 }
 
 var (
@@ -76,7 +86,7 @@ func NewServerService(cfg ServerServiceConfig, logger *slog.Logger) *ServerServi
 		msgs:    make(chan *twismsproto.Message),
 		ready:   make(chan struct{}),
 		service: xcontainer.NewSignaled[*serverService](),
-		conns:   xsync.NewMapOf[string, *xsync.MapOf[*websocket.Conn, struct{}]](),
+		conns:   xsync.NewMapOf[string, *xsync.MapOf[*websocket.Conn, clientMetadata]](),
 		logger:  logger,
 		cfg:     cfg,
 	}
@@ -203,20 +213,21 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 		"accepted new websocket connection",
 		"headers", r.Header)
 
-	var phoneNumbers []string
-	defer func() { s.unregisterConn(conn, phoneNumbers) }()
+	var metadata clientMetadata
+	defer func() { s.unregisterClient(conn, metadata) }()
 
 	ctx := r.Context()
 	handleWS(ctx, conn, s.logger, func(msg *wsbridgeproto.WebsocketPacket) error {
 		switch body := msg.Body.(type) {
 		case *wsbridgeproto.WebsocketPacket_Introduction:
-			// Set the slice that will be deferred later.
-			phoneNumbers = body.Introduction.PhoneNumbers
-			s.registerConn(conn, phoneNumbers)
+			// Register the client for global use.
+			metadata.phoneNumbers = body.Introduction.PhoneNumbers
+			metadata.canAcknowledge = body.Introduction.CanAcknowledge
+			s.registerClient(conn, metadata)
 
 			if body.Introduction.Since != nil {
 				var catchupErr error
-				iter := s.queue.RetrieveMessages(ctx, body.Introduction.Since.AsTime(), phoneNumbers)
+				iter := s.queue.RetrieveMessages(ctx, body.Introduction.Since.AsTime(), metadata.phoneNumbers)
 				iter(func(msg *twismsproto.Message, err error) bool {
 					if err != nil {
 						s.logger.Error(
@@ -269,7 +280,12 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 					"replying with message acknowledgement",
 					"acknowledgement_id", *ackID)
 
-				if err := sendMessageAcknowledgement(ctx, conn, *ackID); err != nil {
+				ack := &wsbridgeproto.MessageAcknowledgement{
+					AcknowledgementId: *ackID,
+					Timestamp:         message.Timestamp,
+				}
+
+				if err := sendMessageAcknowledgement(ctx, conn, ack); err != nil {
 					return fmt.Errorf("could not send message acknowledgement: %w", err)
 				}
 			}
@@ -282,6 +298,7 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 					sendError(ctx, conn, "unknown acknowledgement ID")
 				}
 			}
+
 			return nil
 
 		default:
@@ -290,17 +307,17 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *ServerService) registerConn(conn *websocket.Conn, phoneNumbers []string) {
-	for _, number := range phoneNumbers {
-		connMap, _ := s.conns.LoadOrCompute(number, func() *xsync.MapOf[*websocket.Conn, struct{}] {
-			return xsync.NewMapOfPresized[*websocket.Conn, struct{}](3)
+func (s *ServerService) registerClient(conn *websocket.Conn, metadata clientMetadata) {
+	for _, number := range metadata.phoneNumbers {
+		connMap, _ := s.conns.LoadOrCompute(number, func() *wsConnMap {
+			return xsync.NewMapOfPresized[*websocket.Conn, clientMetadata](3)
 		})
-		connMap.Store(conn, struct{}{})
+		connMap.Store(conn, metadata)
 	}
 }
 
-func (s *ServerService) unregisterConn(conn *websocket.Conn, phoneNumbers []string) {
-	for _, number := range phoneNumbers {
+func (s *ServerService) unregisterClient(conn *websocket.Conn, metadata clientMetadata) {
+	for _, number := range metadata.phoneNumbers {
 		connMap, _ := s.conns.Load(number)
 		if connMap != nil {
 			connMap.Delete(conn)
@@ -329,19 +346,15 @@ func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	// metrics for future use
-	var (
-		clients atomic.Uint64
-		sent    atomic.Uint64
-		acked   atomic.Uint64
-	)
+	var clients atomic.Uint64
+	var delivered atomic.Uint64
 
 	connMap, _ := s.conns.Load(msg.To)
-	connMap.Range(func(conn *websocket.Conn, _ struct{}) bool {
+	connMap.Range(func(conn *websocket.Conn, metadata clientMetadata) bool {
+		clients.Add(1)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			clients.Add(1)
 
 			wsMsg := &wsbridgeproto.Message{
 				Message: msg,
@@ -362,9 +375,9 @@ func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 				return
 			}
 
-			sent.Add(1)
+			delivered.Add(1)
 
-			if ackCh != nil {
+			if ackCh != nil && metadata.canAcknowledge {
 				if err := s.acks.wait(ctx, ackCh); err != nil {
 					s.logger.Info(
 						"timed out waiting for message acknowledgement",
@@ -372,18 +385,18 @@ func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 						"err", err)
 					return
 				}
-				acked.Add(1)
 			}
 		}()
 		return true
 	})
 
-	s.logger.Info(
+	wg.Wait()
+
+	s.logger.Debug(
 		"sent message to wsbridge clients",
 		"to", msg.To,
 		"clients", clients.Load(),
-		"sent", sent.Load(),
-		"acked", acked.Load())
+		"delivered", delivered.Load())
 
 	return nil
 }

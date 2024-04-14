@@ -137,8 +137,9 @@ func (s *ClientService) Start(ctx context.Context, opts ClientStartOpts) error {
 		if err := sendPacket(ctx, conn, &wsbridgeproto.WebsocketPacket{
 			Body: &wsbridgeproto.WebsocketPacket_Introduction{
 				Introduction: &wsbridgeproto.Introduction{
-					PhoneNumbers: s.cfg.PhoneNumbers,
-					Since:        sincepb,
+					PhoneNumbers:   s.cfg.PhoneNumbers,
+					Since:          sincepb,
+					CanAcknowledge: true,
 				},
 			},
 		}); err != nil {
@@ -176,7 +177,16 @@ func (s *ClientService) Start(ctx context.Context, opts ClientStartOpts) error {
 				}
 
 				if ackID := body.Message.AcknowledgementId; ackID != nil {
-					if err := sendMessageAcknowledgement(ctx, conn, *ackID); err != nil {
+					s.logger.Debug(
+						"replying with message acknowledgement",
+						"acknowledgement_id", *ackID)
+
+					ack := &wsbridgeproto.MessageAcknowledgement{
+						AcknowledgementId: *ackID,
+						Timestamp:         message.Timestamp,
+					}
+
+					if err := sendMessageAcknowledgement(ctx, conn, ack); err != nil {
 						return fmt.Errorf("could not send message acknowledgement: %w", err)
 					}
 				}

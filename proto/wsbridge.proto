@@ -24,6 +24,12 @@ message Introduction {
   // The last message timestamp that the client has received.
   // If present, multiple Message packets will be sent to the client.
   optional google.protobuf.Timestamp since = 2;
+  // Whether the client can acknowledge messages.
+  // The server should not waste time waiting for an acknowledgement if this is
+  // not true.
+  // Note that servers always have to acknowledge messages. The wsbridge server
+  // implementation will always acknowledge messages.
+  bool can_acknowledge = 3;
 }
 
 message Error {
@@ -41,4 +47,8 @@ message MessageAcknowledgement {
   // The ID of the message that the client is acknowledging.
   // The same exact string is echoed back from SendMessage.
   string acknowledgement_id = 1;
+  // The timestamp of the message that the client is acknowledging.
+  // This may be overwritten by the server and may not be the same as the
+  // original message's timestamp.
+  google.protobuf.Timestamp timestamp = 2;
 }
