@@ -12,7 +12,6 @@ message WebsocketPacket {
     Introduction introduction = 4;
     Error error = 1;
     twisms.Message message = 2;
-    CatchupResponse catchup_response = 3;
   };
 }
 
@@ -22,17 +21,10 @@ message Introduction {
   // Only messages delivered to this phone number will be sent to the client.
   repeated string phone_numbers = 1;
   // The last message timestamp that the client has received.
-  // If present, a CatchupResponse will be sent to the client.
+  // If present, multiple Message packets will be sent to the client.
   optional google.protobuf.Timestamp since = 2;
 }
 
 message Error {
   string message = 1;
-}
-
-message CatchupResponse {
-  // The messages that the client has missed since the last message.
-  // Although this is not paginated, the work queue may drop messages that are
-  // too old. This list is not guaranteed to be complete.
-  repeated twisms.Message messages = 1;
 }

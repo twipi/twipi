@@ -19,6 +19,8 @@ import (
 	"github.com/twipi/twipi/twid"
 	"github.com/twipi/twipi/twisms"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"nhooyr.io/websocket"
 )
 
@@ -224,16 +226,6 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 
-		case *wsbridgeproto.WebsocketPacket_CatchupResponse:
-			for _, msg := range body.CatchupResponse.Messages {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case s.msgs <- msg:
-				}
-			}
-			return nil
-
 		default:
 			return fmt.Errorf("unexpected message body: %T", body)
 		}
@@ -259,6 +251,11 @@ func (s *ServerService) unregisterConn(conn *websocket.Conn, phoneNumbers []stri
 }
 
 func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Message) error {
+	msg = proto.Clone(msg).(*twismsproto.Message)
+	if msg.Timestamp == nil {
+		msg.Timestamp = timestamppb.Now()
+	}
+
 	if err := s.queue.StoreMessage(ctx, msg); err != nil {
 		return fmt.Errorf("could not store message in queue: %w", err)
 	}

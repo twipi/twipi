@@ -16,6 +16,7 @@ import (
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
 	"github.com/twipi/twipi/twid"
 	"github.com/twipi/twipi/twisms"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"nhooyr.io/websocket"
 )
@@ -156,19 +157,8 @@ func (s *ClientService) Start(ctx context.Context, opts ClientStartOpts) error {
 					return ctx.Err()
 				case incomingMsgs <- body.Message:
 					lastSeen = body.Message.Timestamp.AsTime()
+					return nil
 				}
-				return nil
-
-			case *wsbridgeproto.WebsocketPacket_CatchupResponse:
-				for _, msg := range body.CatchupResponse.Messages {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case incomingMsgs <- msg:
-						lastSeen = msg.Timestamp.AsTime()
-					}
-				}
-				return nil
 
 			default:
 				return fmt.Errorf("unexpected message body: %T", body)
@@ -191,6 +181,11 @@ func (s *ClientService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 	conn := s.conn.Load()
 	if conn == nil {
 		return fmt.Errorf("websocket connection not established")
+	}
+
+	msg = proto.Clone(msg).(*twismsproto.Message)
+	if msg.Timestamp == nil {
+		msg.Timestamp = timestamppb.Now()
 	}
 
 	return SendMessage(ctx, conn, msg)
