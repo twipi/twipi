@@ -10,6 +10,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twipi/cfgutil"
@@ -112,12 +113,7 @@ func (s *ServerService) Start(ctx context.Context) error {
 
 		s.service.Signal(ss)
 
-		<-ctx.Done()
-		if err := ss.Close(); err != nil {
-			return err
-		}
-
-		return ctx.Err()
+		return ss.Start(ctx)
 	})
 
 	return errg.Wait()
@@ -187,11 +183,21 @@ func newServerService(ctx context.Context, h *ServerService) (*serverService, er
 	}, nil
 }
 
-func (s *serverService) Close() error {
+func (s *serverService) Start(ctx context.Context) error {
+	messages := make(chan *twismsproto.Message)
+
+	s.subs.Subscribe(messages, nil)
+	defer s.subs.Unsubscribe(messages)
+
+	for msg := range messages {
+		s.SendMessage(ctx, msg)
+	}
+
 	if err := s.queue.Close(); err != nil {
 		return fmt.Errorf("could not close message queue: %w", err)
 	}
-	return nil
+
+	return ctx.Err()
 }
 
 func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -351,18 +357,30 @@ func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 		}
 	}
 
+	connMap, ok := s.conns.Load(msg.To)
+	if !ok {
+		return nil
+	}
+
+	s.broadcastToConns(ctx, msg, connMap)
+	return nil
+}
+
+func (s *serverService) broadcastToConns(ctx context.Context, msg *twismsproto.Message, connMap *wsConnMap) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
 	var clients atomic.Uint64
 	var delivered atomic.Uint64
 
-	connMap, _ := s.conns.Load(msg.To)
 	connMap.Range(func(conn *websocket.Conn, metadata clientMetadata) bool {
 		clients.Add(1)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
 
 			wsMsg := &wsbridgeproto.Message{
 				Message: msg,
@@ -405,6 +423,4 @@ func (s *serverService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 		"to", msg.To,
 		"clients", clients.Load(),
 		"delivered", delivered.Load())
-
-	return nil
 }
