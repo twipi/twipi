@@ -30,4 +30,4 @@ tasks:
       YOUR_NUMBERS: +19876543210
       WSBRIDGE_URL: ws://localhost:8080/sms/ws
     cmds:
-      - go run ./cmd/wsbridge-client -v -u {{shellQuote .WSBRIDGE_URL}} {{.YOUR_NUMBERS}}
+      - go run ./cmd/wsbridge-client -u {{shellQuote .WSBRIDGE_URL}} {{.YOUR_NUMBERS}}

@@ -78,7 +78,7 @@ func (s *Subscriber[T]) Subscribe(ch chan<- T, filter FilterFunc[T]) {
 	defer s.mu.Unlock()
 
 	if s.subs == nil {
-		panic("pubsub.Subscriber: src is already closed")
+		s.subs = make(map[chan<- T]pipeSub[T])
 	}
 
 	_, ok := s.subs[ch]

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -82,6 +83,29 @@ func start(ctx context.Context) (ok bool) {
 	errg, ctx := errgroup.WithContext(ctx)
 	defer func() { ok = ok && (errg.Wait() == nil) }()
 
+	msgCh := make(chan *twismsproto.Message)
+
+	client.SubscribeMessages(msgCh, nil)
+	defer client.UnsubscribeMessages(msgCh)
+
+	errg.Go(func() error {
+		for msg := range msgCh {
+			if !slices.Contains(phoneNumbers, msg.To) {
+				logger.Debug(
+					"dropping received message as it is not addressed to this client",
+					"from", msg.From,
+					"to", msg.To)
+				continue
+			}
+			logger.Info(
+				"received message",
+				"from", msg.From,
+				"to", msg.To,
+				"body", msg.Body)
+		}
+		return nil
+	})
+
 	errg.Go(func() error {
 		if err := client.Start(ctx, clientStartOpts); err != nil && ctx.Err() == nil {
 			logger.Error("failed to start client", tint.Err(err))
@@ -94,7 +118,7 @@ func start(ctx context.Context) (ok bool) {
 	for {
 		line, err := reader.Readline()
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if errors.Is(err, io.EOF) || errors.Is(err, readline.ErrInterrupt) {
 				return true
 			}
 			logger.Error("failed to read line", tint.Err(err))
