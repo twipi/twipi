@@ -24,3 +24,10 @@ tasks:
       - twid.json
     cmds:
       - nix eval --json -f ./twid.cfg.nix > twid.json
+
+  wsbridge-client:
+    vars:
+      YOUR_NUMBERS: +19876543210
+      WSBRIDGE_URL: ws://localhost:8080/sms/ws
+    cmds:
+      - go run ./cmd/wsbridge-client -v -u {{shellQuote .WSBRIDGE_URL}} {{.YOUR_NUMBERS}}

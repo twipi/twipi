@@ -4,6 +4,7 @@ go 1.22.0
 
 require (
 	github.com/alecthomas/assert/v2 v2.8.1
+	github.com/chzyer/readline v1.5.1
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/google/go-cmp v0.6.0
 	github.com/lmittmann/tint v1.0.4
