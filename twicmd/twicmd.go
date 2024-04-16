@@ -5,44 +5,156 @@ package twicmd
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"sync"
 
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
+	"github.com/twipi/twipi/twisms"
 )
 
-// CommandParser describes a message body parser that returns a command.
-// A CommandParser must be thread-safe.
-type CommandParser interface {
-	// RegisterService registers a service for the command parser.
-	// If the service is already registered with the same name, it must be
-	// overwritten.
-	RegisterService(context.Context, *twicmdproto.Service) error
-	// Parse parses the given message body and returns the parsed command.
-	Parse(context.Context, *twismsproto.MessageBody) (*twicmdproto.Command, error)
+// StartArgs describes the options for starting the command parsing and
+// dispatching framework. These fields are all required and cannot be modified
+// after starting the service.
+type StartArgs struct {
+	// MessageService is the message service to use.
+	MessageService twisms.MessageService
+	// Parsers is the list of known command parsers to use.
+	// This list cannot be changed after starting the service.
+	Parsers []CommandParser
+	// Logger is the logger to use.
+	Logger *slog.Logger
+	// Filters is the list of message filters to apply.
+	// This parameter is optional.
+	Filters *twismsproto.MessageFilters
 }
 
-// ValidateService validates the twicmd service.
-func ValidateService(service *twicmdproto.Service) error {
-	// TODO: validate command names
-	for _, cmd := range service.Commands {
-		if cmd.Name == "" {
-			return fmt.Errorf("service %q: empty command name", service.Name)
+// Start starts the command parsing and dispatching framework.
+// It reads incoming messages from the channel and dispatches them to the
+// appropriate command parsers until the context is done. It does not do any
+// message filtering and will dispatch all incoming messages.
+func Start(ctx context.Context, lookup *ServiceLookup, args StartArgs) error {
+	return (&service{args: args, lookup: lookup}).start(ctx)
+}
+
+type service struct {
+	wg     sync.WaitGroup
+	args   StartArgs
+	lookup *ServiceLookup
+}
+
+func (s *service) start(ctx context.Context) error {
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	msgCh := make(chan *twismsproto.Message)
+	logger := s.args.Logger
+
+	s.args.MessageService.SubscribeMessages(msgCh, s.args.Filters)
+	defer s.args.MessageService.UnsubscribeMessages(msgCh)
+
+	for {
+		var msg *twismsproto.Message
+		var ok bool
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case msg, ok = <-msgCh:
+			if !ok {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				return fmt.Errorf("message channel closed")
+			}
 		}
 
-		if len(cmd.ArgumentPositions) > 0 {
-			for _, name := range cmd.ArgumentPositions {
-				if cmd.Arguments[name] == nil {
-					return fmt.Errorf(
-						"service %q: command %q: missing argument %q",
-						service.Name, cmd.Name, name)
-				}
-			}
-		} else if cmd.ArgumentTrailing {
-			return fmt.Errorf(
-				"service %q: command %q: trailing arguments are not supported",
-				service.Name, cmd.Name)
+		dispatchCtx := &dispatchContext{
+			msg: msg,
+			logger: logger.With(
+				"from", msg.From,
+				"to", msg.To,
+				"timestamp", msg.Timestamp.AsTime()),
+			lookup:  s.lookup,
+			msgs:    s.args.MessageService,
+			parsers: s.args.Parsers,
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			dispatchCtx.logger.Debug("dispatching message")
+			dispatchCtx.dispatch(ctx)
+		}()
+	}
+}
+
+type dispatchContext struct {
+	msg     *twismsproto.Message
+	logger  *slog.Logger
+	lookup  *ServiceLookup
+	msgs    twisms.MessageSender
+	parsers []CommandParser
+}
+
+func (d *dispatchContext) dispatch(ctx context.Context) {
+	var commandParser CommandParser
+	var command *twicmdproto.Command
+	var err error
+
+	for _, parser := range d.parsers {
+		command, err = parser.Parse(ctx, d.lookup, d.msg.Body)
+		if err != nil {
+			d.replyError(ctx, "failed to parse command", err)
+			return
+		}
+		if command != nil {
+			commandParser = parser
+			break
 		}
 	}
 
-	return nil
+	if command == nil {
+		d.replyError(ctx, "cannot understand command (no available parser)", nil)
+		return
+	}
+
+	service, ok := d.lookup.Service(command.Service)
+	if !ok {
+		d.logger.Error(
+			"parser returned unknown service (bug)",
+			"parser", commandParser.Name(),
+			"service", command.Service)
+		return
+	}
+
+	body, err := service.Execute(ctx, command)
+	if err != nil {
+		d.replyError(ctx, "failed to execute command", err)
+		return
+	}
+
+	d.reply(ctx, body)
+}
+
+func (d *dispatchContext) replyError(ctx context.Context, msg string, err error) {
+	d.reply(ctx, &twismsproto.MessageBody{
+		Text: &twismsproto.TextBody{
+			Text: fmt.Sprintf("%s: %s", msg, err),
+		},
+	})
+}
+
+func (d *dispatchContext) reply(ctx context.Context, body *twismsproto.MessageBody) {
+	d.logger.Debug(
+		"replying with message",
+		"body", body.String())
+
+	if err := twisms.ReplyMessage(ctx, d.msgs, d.msg, body); err != nil {
+		d.logger.Error(
+			"failed to send reply",
+			"body", body.String(),
+			"err", err)
+	}
 }

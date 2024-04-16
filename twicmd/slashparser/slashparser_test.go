@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
+	"github.com/twipi/twipi/twicmd"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -25,14 +26,14 @@ func TestParser(t *testing.T) {
 	tests := []struct {
 		name      string
 		body      string
-		parser    *Parser
+		lookup    *twicmd.ServiceLookup
 		result    *twicmdproto.Command
 		resultErr error
 	}{
 		{
 			name:   "parse positional arguments",
 			body:   "/discord send DiscordGophers offtopic Hello, world!",
-			parser: mustParserWithServices("./testdata/test_service.txtpb"),
+			lookup: mustLookupWithServices("./testdata/test_service.txtpb"),
 			result: &twicmdproto.Command{
 				Service: "discord",
 				Command: "send",
@@ -46,7 +47,7 @@ func TestParser(t *testing.T) {
 		{
 			name:   "parse positional arguments with spaces in trailing",
 			body:   "/discord send DiscordGophers offtopic Hello,\n\n world!  ",
-			parser: mustParserWithServices("./testdata/test_service.txtpb"),
+			lookup: mustLookupWithServices("./testdata/test_service.txtpb"),
 			result: &twicmdproto.Command{
 				Service: "discord",
 				Command: "send",
@@ -60,7 +61,7 @@ func TestParser(t *testing.T) {
 		{
 			name:   "parse named arguments",
 			body:   `/discord send guild=DiscordGophers "chan"nel=offtopic message="Hello,` + "\n\n" + `world!"`,
-			parser: mustParserWithServices("./testdata/test_service_named.txtpb"),
+			lookup: mustLookupWithServices("./testdata/test_service_named.txtpb"),
 			result: &twicmdproto.Command{
 				Service: "discord",
 				Command: "send",
@@ -81,7 +82,7 @@ func TestParser(t *testing.T) {
 				Text: &twismsproto.TextBody{Text: test.body},
 			}
 
-			command, err := test.parser.Parse(ctx, body)
+			command, err := NewParser().Parse(ctx, test.lookup, body)
 			assert.Equal(t, test.resultErr, err, "parse command error")
 
 			if diff := cmp.Diff(test.result, command, protocmp.Transform()); diff != "" {
@@ -132,16 +133,28 @@ func FuzzParser_Named(f *testing.F) {
 }
 */
 
-func mustParserWithServices(serviceFiles ...string) *Parser {
-	ctx := context.Background()
-	parser := NewParser()
+type testService struct {
+	name    string
+	service *twicmdproto.Service
+}
+
+func (t *testService) Name() string { return t.name }
+
+func (t *testService) Service(ctx context.Context) (*twicmdproto.Service, error) {
+	return t.service, nil
+}
+
+func (t *testService) Execute(context.Context, *twicmdproto.Command) (*twismsproto.MessageBody, error) {
+	panic("not implemented")
+}
+
+func mustLookupWithServices(serviceFiles ...string) *twicmd.ServiceLookup {
+	lookup := twicmd.NewCommandLookup()
 	for _, file := range serviceFiles {
 		service := mustReadPrototext[*twicmdproto.Service](file)
-		if err := parser.RegisterService(ctx, service); err != nil {
-			panic(fmt.Sprintln("failed to register service:", err))
-		}
+		lookup.Register(&testService{service.Name, service})
 	}
-	return parser
+	return lookup
 }
 
 func mustReadPrototext[T proto.Message](path string) T {

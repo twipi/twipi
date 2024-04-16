@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
@@ -21,41 +20,19 @@ var shellParser = syntax.NewParser(
 
 // Parser is a command parser that parses slash commands.
 type Parser struct {
-	services *xsync.MapOf[string, serviceLookup]
-}
-
-type serviceLookup struct {
-	service  *twicmdproto.Service
-	commands *xsync.MapOf[string, *twicmdproto.CommandDescription]
 }
 
 // NewParser creates a new Parser.
 func NewParser() *Parser {
-	return &Parser{
-		services: xsync.NewMapOf[string, serviceLookup](),
-	}
+	return (*Parser)(nil)
 }
 
-// RegisterService registers a service for the command parser.
-func (p *Parser) RegisterService(ctx context.Context, service *twicmdproto.Service) error {
-	if err := twicmd.ValidateService(service); err != nil {
-		return err
-	}
-
-	lookup := serviceLookup{
-		service: service,
-		commands: xsync.NewMapOfPresized[string, *twicmdproto.CommandDescription](
-			len(service.Commands)),
-	}
-	for _, cmd := range service.Commands {
-		lookup.commands.Store(cmd.Name, cmd)
-	}
-	p.services.Store(service.Name, lookup)
-	return nil
+func (p *Parser) Name() string {
+	return "slash"
 }
 
 // Parse parses the given message body and returns the parsed command.
-func (p *Parser) Parse(ctx context.Context, body *twismsproto.MessageBody) (*twicmdproto.Command, error) {
+func (p *Parser) Parse(ctx context.Context, lookup *twicmd.ServiceLookup, body *twismsproto.MessageBody) (*twicmdproto.Command, error) {
 	if body.Text == nil {
 		return nil, fmt.Errorf("empty message body")
 	}
@@ -72,25 +49,19 @@ func (p *Parser) Parse(ctx context.Context, body *twismsproto.MessageBody) (*twi
 	serviceName := startingWords[0][1:]
 	commandName := startingWords[1]
 
-	lookup, ok := p.services.Load(serviceName)
-	if !ok {
-		return nil, fmt.Errorf("unknown service %q", serviceName)
-	}
-
-	service := lookup.service
-	command, ok := lookup.commands.Load(commandName)
-	if !ok {
-		return nil, fmt.Errorf("unknown command %q for service %q", commandName, serviceName)
-	}
-
-	arguments, err := p.parseCommand(service, command, rest)
+	result, err := lookup.LookupCommand(ctx, serviceName, commandName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse command %q: %w", command.Name, err)
+		return nil, err
+	}
+
+	arguments, err := p.parseCommand(result.Description, result.Command, rest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse command %q: %w", result.Command.Name, err)
 	}
 
 	return &twicmdproto.Command{
-		Service:   service.Name,
-		Command:   command.Name,
+		Service:   result.Description.Name,
+		Command:   result.Command.Name,
 		Arguments: arguments,
 	}, nil
 }
