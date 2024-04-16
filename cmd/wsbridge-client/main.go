@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/chzyer/readline"
@@ -17,6 +18,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/twipi/cfgutil"
 	"github.com/twipi/twipi/proto/out/twismsproto"
+	"github.com/twipi/twipi/twisms"
 	"github.com/twipi/twipi/twisms/wsbridge"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -88,6 +90,8 @@ func start(ctx context.Context) (ok bool) {
 	client.SubscribeMessages(msgCh, nil)
 	defer client.UnsubscribeMessages(msgCh)
 
+	var lastReceivedMessage atomic.Pointer[twismsproto.Message]
+
 	errg.Go(func() error {
 		for msg := range msgCh {
 			if !slices.Contains(phoneNumbers, msg.To) {
@@ -102,6 +106,7 @@ func start(ctx context.Context) (ok bool) {
 				"from", msg.From,
 				"to", msg.To,
 				"body", msg.Body)
+			lastReceivedMessage.Store(msg)
 		}
 		return nil
 	})
@@ -114,7 +119,7 @@ func start(ctx context.Context) (ok bool) {
 		return nil
 	})
 
-	slog.Info("enabling prompt, usage: <recipient_number> [message...]")
+	slog.Info("enabling prompt, usage: [recipient_number] [message...]")
 	for {
 		line, err := reader.Readline()
 		if err != nil {
@@ -125,15 +130,24 @@ func start(ctx context.Context) (ok bool) {
 			return false
 		}
 
-		number, message, ok := strings.Cut(line, " ")
-		if !ok {
-			logger.Error("invalid input", "line", line)
-			continue
+		toNumber, message, ok := strings.Cut(line, " ")
+
+		// Writing the recipient phone number is optional.
+		if !ok || twisms.ValidatePhoneNumber(toNumber) == nil {
+			message = line
+
+			// If we have a last received message, reply to that number
+			if lastMsg := lastReceivedMessage.Load(); lastMsg != nil {
+				toNumber = lastMsg.From
+			} else {
+				logger.Error("no recipient number specified")
+				continue
+			}
 		}
 
 		if err := client.SendMessage(ctx, &twismsproto.Message{
 			From:      phoneNumbers[0],
-			To:        number,
+			To:        toNumber,
 			Timestamp: timestamppb.Now(),
 			Body: &twismsproto.MessageBody{
 				Text: &twismsproto.TextBody{Text: message},
@@ -142,7 +156,7 @@ func start(ctx context.Context) (ok bool) {
 			logger.Error(
 				"failed to send message",
 				"from", phoneNumbers[0],
-				"to", number,
+				"to", toNumber,
 				"body", message,
 				tint.Err(err))
 		}
