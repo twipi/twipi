@@ -24,10 +24,7 @@
 
 						sqlc
 						go-task
-						process-compose
 					];
-
-					PC_PORT_NUM = "38475";
 				};
 			}
 		);

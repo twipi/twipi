@@ -2,6 +2,8 @@ version: '3'
 
 vars:
   GO_MODULE: github.com/twipi/twipi
+  TWID_PORT: 8080
+  TWID_DISCORD_PORT: 8090
 
 includes:
   proto:
@@ -9,8 +11,16 @@ includes:
     dir: proto
 
 tasks:
-  default:
-    deps: [proto:compile, sqlc, build-config]
+  dev:
+    deps: [generate]
+    cmds:
+      - go run ./cmd/twid -vvv -c ./twid.json
+
+  generate:
+    deps:
+      - proto:compile
+      - sqlc
+      - build-config
 
   sqlc:
     cmds:
@@ -22,8 +32,16 @@ tasks:
       - twid.cfg.nix
     generates:
       - twid.json
+    env:
+      TWID_PORT: "{{.TWID_PORT}}"
+      TWID_DISCORD_PORT: "{{.TWID_DISCORD_PORT}}"
     cmds:
-      - nix eval --json -f ./twid.cfg.nix > twid.json
+      - |
+        nix-instantiate \
+          --eval --strict --json \
+          --argstr port {{shellQuote .TWID_PORT}} \
+          --argstr discordPort {{shellQuote .TWID_DISCORD_PORT}} \
+          ./twid.cfg.nix > twid.json
 
   wsbridge-client:
     vars:
