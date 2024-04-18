@@ -2,17 +2,29 @@ package slashparser
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
+	"github.com/twipi/twipi/twid"
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/syntax"
 )
+
+func init() {
+	twid.RegisterTwicmdParser(twid.TwicmdParser{
+		Name: "slash",
+		New: func(cfg json.RawMessage, logger *slog.Logger) (twicmd.CommandParser, error) {
+			return NewParser(), nil
+		},
+	})
+}
 
 var shellParser = syntax.NewParser(
 	syntax.Variant(syntax.LangPOSIX),

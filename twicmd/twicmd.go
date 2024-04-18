@@ -13,45 +13,35 @@ import (
 	"github.com/twipi/twipi/twisms"
 )
 
-// StartArgs describes the options for starting the command parsing and
-// dispatching framework. These fields are all required and cannot be modified
-// after starting the service.
-type StartArgs struct {
-	// MessageService is the message service to use.
-	MessageService twisms.MessageService
-	// Parsers is the list of known command parsers to use.
-	// This list cannot be changed after starting the service.
-	Parsers []CommandParser
-	// Logger is the logger to use.
-	Logger *slog.Logger
+// StartOpts describes the optional options for starting the command parsing
+// and dispatching framework. All fields are optional.
+type StartOpts struct {
 	// Filters is the list of message filters to apply.
 	// This parameter is optional.
 	Filters *twismsproto.MessageFilters
 }
 
-// Start starts the command parsing and dispatching framework.
-// It reads incoming messages from the channel and dispatches them to the
-// appropriate command parsers until the context is done. It does not do any
-// message filtering and will dispatch all incoming messages.
-func Start(ctx context.Context, lookup *ServiceLookup, args StartArgs) error {
-	return (&service{args: args, lookup: lookup}).start(ctx)
+// Manager handles the command parsing and dispatching framework.
+// It is in charge of reading incoming messages from the channel and dispatching
+// them to the appropriate command parsers.
+type Manager struct {
+	SMS      twisms.MessageService
+	Parsers  []CommandParser
+	Services *ServiceLookup
+	Logger   *slog.Logger
+	Opts     StartOpts
 }
 
-type service struct {
-	wg     sync.WaitGroup
-	args   StartArgs
-	lookup *ServiceLookup
-}
-
-func (s *service) start(ctx context.Context) error {
+// Start starts the manager.
+func (s *Manager) Start(ctx context.Context) error {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
 	msgCh := make(chan *twismsproto.Message)
-	logger := s.args.Logger
+	logger := s.Logger
 
-	s.args.MessageService.SubscribeMessages(msgCh, s.args.Filters)
-	defer s.args.MessageService.UnsubscribeMessages(msgCh)
+	s.SMS.SubscribeMessages(msgCh, s.Opts.Filters)
+	defer s.SMS.UnsubscribeMessages(msgCh)
 
 	for {
 		var msg *twismsproto.Message
@@ -75,9 +65,9 @@ func (s *service) start(ctx context.Context) error {
 				"from", msg.From,
 				"to", msg.To,
 				"timestamp", msg.Timestamp.AsTime()),
-			lookup:  s.lookup,
-			msgs:    s.args.MessageService,
-			parsers: s.args.Parsers,
+			lookup:  s.Services,
+			msgs:    s.SMS,
+			parsers: s.Parsers,
 		}
 
 		wg.Add(1)

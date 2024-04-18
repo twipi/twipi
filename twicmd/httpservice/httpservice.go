@@ -12,16 +12,40 @@ package httpservice
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
+	"github.com/twipi/twipi/twid"
 	"google.golang.org/protobuf/proto"
 	"libdb.so/hrtproto"
 )
+
+// HTTPServiceConfig is the expected configuration for an HTTP service.
+type HTTPServiceConfig struct {
+	// Name is the name of the service.
+	Name string `json:"name"`
+	// URL is the base URL of the HTTP service.
+	URL string `json:"url"`
+}
+
+func init() {
+	twid.RegisterTwicmdService(twid.TwicmdService{
+		Name: "http",
+		New: func(cfg json.RawMessage, logger *slog.Logger) (twicmd.Service, error) {
+			var config HTTPServiceConfig
+			if err := json.Unmarshal(cfg, &config); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal HTTP service config: %w", err)
+			}
+			return NewHTTPService(config.Name, config.URL), nil
+		},
+	})
+}
 
 // HTTPService wraps an HTTP API and implements [twicmd.Service].
 type HTTPService struct {

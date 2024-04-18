@@ -9,6 +9,7 @@ import (
 type Root struct {
 	ListenAddr string `json:"listen_addr"`
 	Twisms     Twisms `json:"twisms"`
+	Twicmd     Twicmd `json:"twicmd"`
 }
 
 // Twisms is the configuration for package Twisms.
@@ -44,5 +45,52 @@ func (t *TwismsService) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON implements [json.Marshaler]. It never fails.
 func (t *TwismsService) MarshalJSON() ([]byte, error) {
+	return t.raw, nil
+}
+
+type Twicmd struct {
+	Parsers  []TwicmdParser  `json:"parsers"`
+	Services []TwicmdService `json:"services"`
+}
+
+// TwicmdParser is the configuration for a Twicmd parser.
+type TwicmdParser struct {
+	Module string `json:"module"`
+
+	raw json.RawMessage
+}
+
+func (t *TwicmdParser) UnmarshalJSON(b []byte) error {
+	type raw TwicmdParser
+	if err := json.Unmarshal(b, (*raw)(t)); err != nil {
+		return err
+	}
+	*t = TwicmdParser(*t)
+	t.raw = json.RawMessage(bytes.Clone(b))
+	return nil
+}
+
+func (t *TwicmdParser) MarshalJSON() ([]byte, error) {
+	return t.raw, nil
+}
+
+// TwicmdService is the configuration for a Twicmd service.
+type TwicmdService struct {
+	Module string `json:"module"`
+
+	raw json.RawMessage
+}
+
+func (t *TwicmdService) UnmarshalJSON(b []byte) error {
+	type raw TwicmdService
+	if err := json.Unmarshal(b, (*raw)(t)); err != nil {
+		return err
+	}
+	*t = TwicmdService(*t)
+	t.raw = json.RawMessage(bytes.Clone(b))
+	return nil
+}
+
+func (t *TwicmdService) MarshalJSON() ([]byte, error) {
 	return t.raw, nil
 }

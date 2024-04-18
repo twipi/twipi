@@ -149,7 +149,7 @@ func (t *testService) Execute(context.Context, *twicmdproto.Command) (*twismspro
 }
 
 func mustLookupWithServices(serviceFiles ...string) *twicmd.ServiceLookup {
-	lookup := twicmd.NewCommandLookup()
+	lookup := twicmd.NewServiceLookup()
 	for _, file := range serviceFiles {
 		service := mustReadPrototext[*twicmdproto.Service](file)
 		lookup.Register(&testService{service.Name, service})

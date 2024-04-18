@@ -61,8 +61,10 @@ type ServiceLookup struct {
 	services *xsync.MapOf[string, Service]
 }
 
-// NewCommandLookup creates a new empty CommandLookup instance.
-func NewCommandLookup() *ServiceLookup {
+// TODO: convert the local map to a ServiceRegistry interface.
+
+// NewServiceLookup creates a new empty [ServiceLookup] instance.
+func NewServiceLookup() *ServiceLookup {
 	return &ServiceLookup{
 		services: xsync.NewMapOf[string, Service](),
 	}

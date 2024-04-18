@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twid/config"
 	"github.com/twipi/twipi/twisms"
@@ -28,31 +30,37 @@ func RegisterTwismsModule(module TwismsModule) {
 	twismsModules[module.Name] = module
 }
 
-func initializeTwisms(cfg config.Root, services *initializedServices, logger *slog.Logger) error {
+func initializeTwisms(cfg config.Root, lifecycle *lifecycle, router *chi.Mux, logger *slog.Logger) (twisms.MessageService, error) {
+	var services []twisms.MessageService
+
 	for _, serviceCfg := range cfg.Twisms.Services {
 		module, ok := twismsModules[serviceCfg.Module]
 		if !ok {
-			return fmt.Errorf("unknown twisms module %s", serviceCfg.Module)
+			return nil, fmt.Errorf("unknown twisms module %s", serviceCfg.Module)
 		}
 
-		logger := logger.With("twisms_module", module.Name)
+		logger := logger.With(
+			"module", "twisms",
+			"twisms_module", module.Name)
 		logger.Info("initializing twisms module")
 
 		serviceCfgRaw, _ := serviceCfg.MarshalJSON()
 
 		service, err := module.New(serviceCfgRaw, logger)
 		if err != nil {
-			return fmt.Errorf("cannot create twisms service: %w", err)
+			return nil, fmt.Errorf("cannot create twisms service: %w", err)
 		}
 
-		if err := services.add(service, serviceCfg, logger); err != nil {
-			return fmt.Errorf("cannot add twisms service: %w", err)
+		if handler, ok := service.(http.Handler); ok {
+			if err := addRoute(router, serviceCfg, handler, logger); err != nil {
+				return nil, fmt.Errorf("cannot add twisms service route: %w", err)
+			}
 		}
 
-		services.twisms = append(services.twisms, service)
+		services = append(services, service)
 	}
 
-	return nil
+	return &twismsWrapper{services: services}, nil
 }
 
 type twismsWrapper struct {

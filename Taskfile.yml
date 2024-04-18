@@ -1,9 +1,13 @@
 version: '3'
 
-vars:
+env:
   GO_MODULE: github.com/twipi/twipi
-  TWID_PORT: 8080
-  TWID_DISCORD_PORT: 8090
+
+  PORT: 8080
+  DISCORD_PORT: 8090
+
+  YOUR_NUMBERS: +19876543210
+  WSBRIDGE_URL: ws://localhost:8080/sms/ws
 
 includes:
   proto:
@@ -27,25 +31,16 @@ tasks:
       - sqlc generate
 
   build-config:
-    watch: true
-    sources:
-      - twid.cfg.nix
     generates:
       - twid.json
-    env:
-      TWID_PORT: "{{.TWID_PORT}}"
-      TWID_DISCORD_PORT: "{{.TWID_DISCORD_PORT}}"
     cmds:
       - |
         nix-instantiate \
           --eval --strict --json \
-          --argstr port {{shellQuote .TWID_PORT}} \
-          --argstr discordPort {{shellQuote .TWID_DISCORD_PORT}} \
+          --argstr port "$TWID_PORT" \
+          --argstr discordPort "$TWID_DISCORD_PORT" \
           ./twid.cfg.nix > twid.json
 
   wsbridge-client:
-    vars:
-      YOUR_NUMBERS: +19876543210
-      WSBRIDGE_URL: ws://localhost:8080/sms/ws
     cmds:
-      - go run ./cmd/wsbridge-client -u {{shellQuote .WSBRIDGE_URL}} {{.YOUR_NUMBERS}}
+      - go run ./cmd/wsbridge-client -u "$WSBRIDGE_URL" $YOUR_NUMBERS

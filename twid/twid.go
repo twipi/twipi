@@ -11,7 +11,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/twipi/twipi/internal/srvutil"
 	"github.com/twipi/twipi/twid/config"
-	"github.com/twipi/twipi/twisms"
 	"golang.org/x/sync/errgroup"
 	"libdb.so/hserve"
 )
@@ -20,26 +19,28 @@ import (
 func Start(ctx context.Context, cfg config.Root, logger *slog.Logger) error {
 	errg, ctx := errgroup.WithContext(ctx)
 
+	lifecycle := &lifecycle{}
+	defer lifecycle.close(logger)
+
 	router := chi.NewMux()
 	router.Get("/health", srvutil.Respond200)
 	router.Mount("/metrics", promhttp.Handler())
 
-	services := &initializedServices{
-		router: router,
-	}
-	defer func() { closeAll(logger, services.closers...) }()
-
-	if err := initializeTwisms(cfg, services, logger); err != nil {
+	sms, err := initializeTwisms(cfg, lifecycle, router, logger)
+	if err != nil {
 		return fmt.Errorf("failed to initialize TwiSMS: %w", err)
 	}
 
-	for _, starter := range services.starters {
-		starter := starter
-		errg.Go(func() error { return starter.Start(ctx) })
+	if err := initializeTwicmd(cfg, lifecycle, sms, logger); err != nil {
+		return fmt.Errorf("failed to initialize Twicmd: %w", err)
 	}
 
 	errg.Go(func() error {
+		logger.Info("starting all services")
+		return lifecycle.start(ctx)
+	})
 
+	errg.Go(func() error {
 		logger.Info("starting HTTP server", "addr", cfg.ListenAddr)
 		if err := hserve.ListenAndServe(ctx, cfg.ListenAddr, router); err != nil {
 			slog.Error(
@@ -54,31 +55,33 @@ func Start(ctx context.Context, cfg config.Root, logger *slog.Logger) error {
 	return errg.Wait()
 }
 
-type initializedServices struct {
-	router   *chi.Mux
-	twisms   []twisms.MessageService
+func addRoute(router *chi.Mux, cfg config.TwismsService, service http.Handler, logger *slog.Logger) (err error) {
+	if cfg.HTTPPath == "" {
+		return fmt.Errorf(
+			"service %T implements http.Handler but has no http_path configured",
+			service)
+	}
+
+	logger.Debug("adding HTTP handler", "path", cfg.HTTPPath)
+
+	// Handle chi's panic.
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+
+	router.Mount(cfg.HTTPPath, service)
+	return nil
+}
+
+// lifecycle is a helper struct to manage the lifecycle of services.
+type lifecycle struct {
 	starters []Starter
 	closers  []io.Closer
 }
 
-func (s *initializedServices) add(service any, cfg config.TwismsService, logger *slog.Logger) (err error) {
-	if v, ok := service.(http.Handler); ok {
-		if cfg.HTTPPath == "" {
-			logger.Warn("service implements http.Handler but has no HTTP path")
-		} else {
-			logger.Debug("adding HTTP handler", "path", cfg.HTTPPath)
-			(func() {
-				// Handle chi's panic.
-				defer func() {
-					if r := recover(); r != nil {
-						err = fmt.Errorf("%v", r)
-					}
-				}()
-				s.router.Mount(cfg.HTTPPath, v)
-			})()
-		}
-	}
-
+func (s *lifecycle) add(service any, logger *slog.Logger) {
 	if v, ok := service.(Starter); ok {
 		logger.Debug("adding starter")
 		s.starters = append(s.starters, v)
@@ -88,12 +91,19 @@ func (s *initializedServices) add(service any, cfg config.TwismsService, logger 
 		logger.Debug("adding closer")
 		s.closers = append(s.closers, v)
 	}
-
-	return nil
 }
 
-func closeAll(logger *slog.Logger, closers ...io.Closer) {
-	for _, c := range closers {
+func (s *lifecycle) start(ctx context.Context) error {
+	errg, ctx := errgroup.WithContext(ctx)
+	for _, starter := range s.starters {
+		starter := starter
+		errg.Go(func() error { return starter.Start(ctx) })
+	}
+	return errg.Wait()
+}
+
+func (s *lifecycle) close(logger *slog.Logger) {
+	for _, c := range s.closers {
 		if err := c.Close(); err != nil {
 			logger.Error("failed to close", "err", err)
 		}

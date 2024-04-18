@@ -12,6 +12,8 @@ import (
 	"github.com/twipi/twipi/twid"
 	"github.com/twipi/twipi/twid/config"
 
+	_ "github.com/twipi/twipi/twicmd/httpservice"
+	_ "github.com/twipi/twipi/twicmd/slashparser"
 	_ "github.com/twipi/twipi/twisms/wsbridge"
 )
 
