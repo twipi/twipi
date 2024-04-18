@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/alecthomas/assert/v2 v2.8.1
 	github.com/chzyer/readline v1.5.1
-	github.com/go-chi/chi/v5 v5.0.7
+	github.com/go-chi/chi/v5 v5.0.8
 	github.com/google/go-cmp v0.6.0
 	github.com/lmittmann/tint v1.0.4
 	github.com/prometheus/client_golang v1.19.0
@@ -14,6 +14,8 @@ require (
 	github.com/twipi/cfgutil v0.0.0-20240229095544-ee831a14842a
 	golang.org/x/sync v0.6.0
 	google.golang.org/protobuf v1.33.0
+	libdb.so/hrt v0.0.0-20230610032842-abf58de78776
+	libdb.so/hrtproto v0.0.0-20240418200917-01082d47e355
 	libdb.so/hserve v0.0.0-20230404043009-95e112a6e0a5
 	libdb.so/lazymigrate v0.0.0-20240221022551-223d9b492a64
 	modernc.org/sqlite v1.29.6
