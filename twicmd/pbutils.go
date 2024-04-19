@@ -11,3 +11,21 @@ func MapArguments(arguments []*twicmdproto.CommandArgument) map[string]string {
 	}
 	return m
 }
+
+// StatusResponse creates a new [twicmdproto.ExecuteResponse] with the given status.
+func StatusResponse(status string) *twicmdproto.ExecuteResponse {
+	return &twicmdproto.ExecuteResponse{
+		Response: &twicmdproto.ExecuteResponse_Status{
+			Status: status,
+		},
+	}
+}
+
+// TextResponse creates a new [twicmdproto.ExecuteResponse] with the given text.
+func TextResponse(text string) *twicmdproto.ExecuteResponse {
+	return &twicmdproto.ExecuteResponse{
+		Response: &twicmdproto.ExecuteResponse_Text{
+			Text: text,
+		},
+	}
+}
