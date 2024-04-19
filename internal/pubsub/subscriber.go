@@ -11,12 +11,13 @@ import (
 // is a valid Subscriber.
 type Subscriber[T any] struct {
 	mu   sync.RWMutex
+	wg   sync.WaitGroup
 	subs map[chan<- T]pipeSub[T]
 }
 
 type pipeSub[T any] struct {
 	filter func(T) bool
-	queue  chan<- T
+	queue  chan<- T // unbounded FIFO queue
 	stop   chan struct{}
 }
 
@@ -28,6 +29,8 @@ func NewSubscriber[T any]() *Subscriber[T] {
 // Listen starts broadcasting messages received from the given src channel.
 // It blocks until the src channel is closed or ctx is canceled.
 func (s *Subscriber[T]) Listen(ctx context.Context, src <-chan T) error {
+	defer s.wg.Wait()
+
 	s.mu.Lock()
 	if s.subs == nil {
 		s.subs = make(map[chan<- T]pipeSub[T])
@@ -42,18 +45,29 @@ func (s *Subscriber[T]) Listen(ctx context.Context, src <-chan T) error {
 			if !ok {
 				return nil
 			}
-			s.publish(msg)
+			s.publish(ctx, msg)
 		}
 	}
 }
 
-func (s *Subscriber[T]) publish(value T) {
+func (s *Subscriber[T]) publish(ctx context.Context, value T) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for ch, sub := range s.subs {
-		if sub.filter(value) {
-			ch <- value
+	for _, sub := range s.subs {
+		if !sub.filter(value) {
+			continue
+		}
+
+		// We're ok with waiting for sub.queue to accept the value, since
+		// they go to unbounded queues.
+		select {
+		case <-ctx.Done():
+			return
+		case <-sub.stop:
+			return
+		case sub.queue <- value:
+			// ok
 		}
 	}
 }
@@ -89,7 +103,10 @@ func (s *Subscriber[T]) Subscribe(ch chan<- T, filter FilterFunc[T]) {
 	queue := make(chan T, 1)
 	stop := make(chan struct{})
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
+
 		var dst chan<- T
 		var pending xcontainer.Queue[T]
 
