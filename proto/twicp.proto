@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package twicp;
+
+option go_package = "github.com/twipi/twipi/proto/out/twicppb";
+
+// The schema of the options available for the control panel.
+message Schema {
+  string service = 1;
+  // The list of option categories.
+  repeated OptionCategory categories = 2;
+  // The list of option types.
+  repeated OptionType types = 3;
+}
+
+// The list of options available for a given resource.
+message OptionCategory {
+  // The title of the category.
+  string title = 1;
+  // The human-readable description of the category.
+  string description = 2;
+  // The list of options in the category.
+  repeated OptionType options = 3;
+}
+
+// The type of the option.
+message OptionType {
+  string id = 1;
+  // The name of the option.
+  string name = 2;
+  // The human-readable description of the option.
+  string description = 3;
+  oneof type {
+    StringType string = 10;
+    NumberType int = 11;
+    SwitchType switch = 12;
+  }
+}
+
+// A string option type.
+message StringType {
+  // Whether to enforce the value to be non-empty.
+  // Will not allow the user to apply without a value.
+  bool required = 1;
+  // Whether the value is sensitive and should not be printed.
+  // The server may choose to randomly generate a value for this option.
+  // The client will only send over updated values, so the user may leave this
+  // field alone.
+  bool sensitive = 2;
+}
+
+message NumberType {
+  // The minimum value allowed.
+  int64 min = 1;
+  // The maximum value allowed.
+  int64 max = 2;
+  // Whether the value is a decimal number (floating point).
+  bool decimal = 3;
+}
+
+message SwitchType {
+}
+
+// A single option value.
+message OptionValue {
+  string id = 1;
+  oneof value {
+    string string = 10;
+    int64 int = 11;
+    bool switch = 12;
+  }
+}
+
+// A list of option values.
+message OptionValues {
+  repeated OptionValue values = 1;
+}
+
+// A request to apply a list of options.
+message ApplyRequest {
+  // The list of options to apply.
+  // Only the values specified here will be updated.
+  repeated OptionValue values = 1;
+}
+
+// The result of applying a list of options.
+message ApplyResponse {
+  // Whether the apply was successful. If false, the errors field will be
+  // populated.
+  bool success = 1;
+  // The list of errors that occurred when applying the options.
+  repeated ApplyError errors = 2;
+}
+
+// A single error message when applying an option.
+message ApplyError {
+  // The ID of the option that caused the error.
+  string option_id = 1;
+  // The error message.
+  string message = 2;
+}

@@ -15,6 +15,10 @@ message Service {
   string description = 3;
   // The list of descriptions of commands that the service provides.
   repeated CommandDescription commands = 2;
+  // The URL of the service's icon.
+  optional string icon_url = 4;
+  // The optional brand color of the service.
+  optional string color = 5;
 }
 
 // A description of a command that the service provides.
