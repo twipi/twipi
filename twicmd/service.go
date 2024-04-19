@@ -7,7 +7,6 @@ import (
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twipi/twipi/internal/xiter"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
-	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twisms"
 )
 
@@ -24,7 +23,7 @@ type Service interface {
 	Service(ctx context.Context) (*twicmdproto.Service, error)
 	// Execute executes the given command and returns the message body
 	// to be replied back to the sender.
-	Execute(context.Context, *twismsproto.Message, *twicmdproto.Command) (*twismsproto.MessageBody, error)
+	Execute(context.Context, *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error)
 
 	twisms.MessageSubscriber
 }

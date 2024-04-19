@@ -64,21 +64,11 @@ func (s *HTTPServer) Close() error {
 }
 
 func (s *HTTPServer) getService(ctx context.Context, _ hrt.None) (*twicmdproto.Service, error) {
-	service, err := s.service.Service(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get service: %w", err)
-	}
-	return service, nil
+	return s.service.Service(ctx)
 }
 
-func (s *HTTPServer) execute(ctx context.Context, req *twicmdproto.ExecuteCommandRequest) (*twicmdproto.ExecuteCommandResponse, error) {
-	body, err := s.service.Execute(ctx, req.Message, req.Command)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute command: %w", err)
-	}
-	return &twicmdproto.ExecuteCommandResponse{
-		Body: body,
-	}, nil
+func (s *HTTPServer) execute(ctx context.Context, req *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
+	return s.service.Execute(ctx, req)
 }
 
 func (s *HTTPServer) sseMessages(w http.ResponseWriter, r *http.Request) {

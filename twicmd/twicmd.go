@@ -4,7 +4,6 @@ package twicmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -97,7 +96,7 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 	for _, parser := range d.parsers {
 		command, err = parser.Parse(ctx, d.lookup, d.msg.Body)
 		if err != nil {
-			d.replyError(ctx, fmt.Errorf("syntax: %w", err))
+			d.replyText(ctx, err.Error())
 			return
 		}
 		if command != nil {
@@ -107,7 +106,7 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 	}
 
 	if command == nil {
-		d.replyError(ctx, errors.New("cannot understand command (no available parser)"))
+		d.replyText(ctx, "cannot understand command (no available parser)")
 		return
 	}
 
@@ -120,21 +119,30 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 		return
 	}
 
-	body, err := service.Execute(ctx, d.msg, command)
+	resp, err := service.Execute(ctx, &twicmdproto.ExecuteRequest{
+		Command: command,
+		Message: d.msg,
+	})
 	if err != nil {
-		d.replyError(ctx, err)
+		d.replyText(ctx, "An error occurred while executing the command.")
 		return
 	}
 
-	if body != nil {
-		d.reply(ctx, body)
+	switch response := resp.Response.(type) {
+	case *twicmdproto.ExecuteResponse_Text:
+		d.replyText(ctx, response.Text)
+	case *twicmdproto.ExecuteResponse_Body:
+		d.reply(ctx, response.Body)
+	case *twicmdproto.ExecuteResponse_Status:
+		// TODO: use AI to transform the status into a more human-friendly message
+		d.replyText(ctx, response.Status)
 	}
 }
 
-func (d *dispatchContext) replyError(ctx context.Context, err error) {
+func (d *dispatchContext) replyText(ctx context.Context, status string) {
 	d.reply(ctx, &twismsproto.MessageBody{
 		Text: &twismsproto.TextBody{
-			Text: fmt.Sprintf("Error: %s", err),
+			Text: status,
 		},
 	})
 }

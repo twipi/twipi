@@ -232,16 +232,12 @@ func (s *HTTPService) Service(ctx context.Context) (*twicmdproto.Service, error)
 }
 
 // Execute implements [twicmd.Service].
-func (s *HTTPService) Execute(ctx context.Context, msg *twismsproto.Message, cmd *twicmdproto.Command) (*twismsproto.MessageBody, error) {
-	req := &twicmdproto.ExecuteCommandRequest{
-		Message: msg,
-		Command: cmd,
-	}
-	resp := new(twicmdproto.ExecuteCommandResponse)
+func (s *HTTPService) Execute(ctx context.Context, req *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
+	resp := new(twicmdproto.ExecuteResponse)
 	if err := s.do(ctx, "POST", "/execute", req, resp); err != nil {
 		return nil, fmt.Errorf("failed to execute command: %w", err)
 	}
-	return resp.Body, nil
+	return resp, nil
 }
 
 func (s *HTTPService) do(ctx context.Context, method, path string, body, dst proto.Message) error {

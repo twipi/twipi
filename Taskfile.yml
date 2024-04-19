@@ -6,7 +6,7 @@ env:
   PORT: 8080
   DISCORD_PORT: 8090
 
-  YOUR_NUMBERS: +19876543210
+  PHONE_NUMBER: +19876543210
   WSBRIDGE_URL: ws://localhost:8080/sms/ws
 
 includes:
@@ -37,10 +37,11 @@ tasks:
       - |
         nix-instantiate \
           --eval --strict --json \
-          --argstr port "$TWID_PORT" \
-          --argstr discordPort "$TWID_DISCORD_PORT" \
+          --argstr port "$PORT" \
+          --argstr discordPort "$DISCORD_PORT" \
+          --argstr phoneNumber "$PHONE_NUMBER" \
           ./twid.cfg.nix > twid.json
 
   wsbridge-client:
     cmds:
-      - go run ./cmd/wsbridge-client -u "$WSBRIDGE_URL" $YOUR_NUMBERS
+      - go run ./cmd/wsbridge-client -u "$WSBRIDGE_URL" "$PHONE_NUMBER"

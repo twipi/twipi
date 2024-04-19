@@ -96,12 +96,21 @@ message CommandArgument {
 }
 
 // The request sent on the POST /execute endpoint.
-message ExecuteCommandRequest {
+message ExecuteRequest {
   Command command = 1;
   twisms.Message message = 2;
 }
 
 // The response sent back to the user after executing a command.
-message ExecuteCommandResponse {
-  twisms.MessageBody body = 1;
+message ExecuteResponse {
+  oneof response {
+    // A plain text response.
+    // This is the same as the Text field in MessageBody.
+    string text = 1;
+    // A response with a message body.
+    twisms.MessageBody body = 2;
+    // A system response, including errors.
+    // These responses may be localized or transformed.
+    string status = 3;
+  }
 }
