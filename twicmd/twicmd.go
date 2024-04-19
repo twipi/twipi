@@ -4,6 +4,7 @@ package twicmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -96,7 +97,7 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 	for _, parser := range d.parsers {
 		command, err = parser.Parse(ctx, d.lookup, d.msg.Body)
 		if err != nil {
-			d.replyError(ctx, "failed to parse command", err)
+			d.replyError(ctx, fmt.Errorf("syntax: %w", err))
 			return
 		}
 		if command != nil {
@@ -106,7 +107,7 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 	}
 
 	if command == nil {
-		d.replyError(ctx, "cannot understand command (no available parser)", nil)
+		d.replyError(ctx, errors.New("cannot understand command (no available parser)"))
 		return
 	}
 
@@ -121,7 +122,7 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 
 	body, err := service.Execute(ctx, d.msg, command)
 	if err != nil {
-		d.replyError(ctx, "failed to execute command", err)
+		d.replyError(ctx, err)
 		return
 	}
 
@@ -130,10 +131,10 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 	}
 }
 
-func (d *dispatchContext) replyError(ctx context.Context, msg string, err error) {
+func (d *dispatchContext) replyError(ctx context.Context, err error) {
 	d.reply(ctx, &twismsproto.MessageBody{
 		Text: &twismsproto.TextBody{
-			Text: fmt.Sprintf("%s: %s", msg, err),
+			Text: fmt.Sprintf("Error: %s", err),
 		},
 	})
 }
