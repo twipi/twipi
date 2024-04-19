@@ -125,7 +125,9 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 		return
 	}
 
-	d.reply(ctx, body)
+	if body != nil {
+		d.reply(ctx, body)
+	}
 }
 
 func (d *dispatchContext) replyError(ctx context.Context, msg string, err error) {
