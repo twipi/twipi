@@ -11,6 +11,8 @@ message Service {
   // The name of the service. Each service registers its own single-word name,
   // usually the brand name, to be used in this.
   string name = 1;
+  // The human-readable description of the service.
+  string description = 3;
   // The list of descriptions of commands that the service provides.
   repeated CommandDescription commands = 2;
 }
@@ -21,6 +23,8 @@ message Service {
 message CommandDescription {
   // The name of the slash command.
   string name = 1;
+  // The human-readable description of the command.
+  string description = 5;
   // The map of named arguments that the command accepts.
   map<string, CommandArgumentDescription> arguments = 2;
   // The order in which the named arguments are expected.
@@ -53,7 +57,29 @@ enum CommandArgumentHint {
   COMMAND_ARGUMENT_HINT_EMAIL = 5;
   COMMAND_ARGUMENT_HINT_PHONE_NUMBER = 6;
   COMMAND_ARGUMENT_HINT_ADDRESS = 7;
+  COMMAND_ARGUMENT_HINT_DURATION = 8;
+  COMMAND_ARGUMENT_HINT_DATE = 9;
   // ...
+}
+
+// A request to autocomplete an argument.
+// It returns a list of possible values for the given argument sorted by
+// relevance.
+message ArgumentAutocompleteRequest {
+  // The name of the service.
+  string service = 1;
+  // The name of the command.
+  string command = 2;
+  // The name of the argument within the command.
+  string argument = 3;
+  // The input to autocomplete.
+  // If empty, list as many suggestions as possible.
+  string input = 4;
+}
+
+// The response to an argument autocompletion request.
+message ArgumentAutocompleteResponse {
+  repeated string suggestions = 1;
 }
 
 // A command to be executed sent by the user.
