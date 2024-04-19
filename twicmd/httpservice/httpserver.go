@@ -3,15 +3,14 @@ package httpservice
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
-	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
-	"github.com/twipi/twipi/twisms"
 	"google.golang.org/protobuf/encoding/protojson"
 	"libdb.so/hrt"
 	"libdb.so/hrtproto"
@@ -19,53 +18,48 @@ import (
 
 // HTTPServer wraps a [twicmd.Service] and turns it into an HTTP server.
 type HTTPServer struct {
-	service twicmd.Service
-	router  *chi.Mux
-	logger  *slog.Logger
-
-	msgQueue       []*twismsproto.Message
-	msgQueueMutex  sync.Mutex
-	msgQueueSignal chan struct{}
+	service  twicmd.Service
+	router   *chi.Mux
+	logger   *slog.Logger
+	msgQueue chan *twismsproto.Message
 }
 
-var _ twisms.MessageSender = (*HTTPServer)(nil)
+var (
+	_ http.Handler = (*HTTPServer)(nil)
+	_ io.Closer    = (*HTTPServer)(nil)
+)
 
 // NewHTTPServer creates a new HTTP server with the given service.
 func NewHTTPServer(service twicmd.Service, logger *slog.Logger) *HTTPServer {
+	msgQueue := make(chan *twismsproto.Message)
+	service.SubscribeMessages(msgQueue, nil)
+
 	s := &HTTPServer{
-		router:         chi.NewRouter(),
-		service:        service,
-		msgQueueSignal: make(chan struct{}, 1),
+		router:   chi.NewRouter(),
+		service:  service,
+		msgQueue: msgQueue,
 	}
-	s.router.Use(hrt.Use(hrt.Opts{
+
+	r := s.router
+	r.Use(hrt.Use(hrt.Opts{
 		Encoder:     hrtproto.ProtoJSONEncoder,
 		ErrorWriter: hrt.TextErrorWriter,
 	}))
-	s.router.Get("/", hrt.Wrap(s.getService))
-	s.router.Get("/messages", s.sseMessages)
-	s.router.Post("/execute", hrt.Wrap(s.execute))
+	r.Get("/", hrt.Wrap(s.getService))
+	r.Get("/messages", s.sseMessages)
+	r.Post("/execute", hrt.Wrap(s.execute))
+
 	return s
 }
 
-// SendMessage enqueues a message to be processed by the server.
-// The message will be processed eventually as the server connects to the SSE
-// endpoint.
-func (s *HTTPServer) SendMessage(ctx context.Context, msg *twismsproto.Message) error {
-	s.msgQueueMutex.Lock()
-	s.msgQueue = append(s.msgQueue, msg)
-	s.msgQueueMutex.Unlock()
+// ServeHTTP implements the [http.Handler] interface.
+func (s *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.router.ServeHTTP(w, r)
+}
 
-	select {
-	case s.msgQueueSignal <- struct{}{}:
-	default:
-	}
-
-	s.logger.Debug(
-		"signaled message queue, awaiting processing",
-		"message.from", msg.From,
-		"message.to", msg.To,
-		"batch_size", len(s.msgQueue))
-
+// Close frees resources used by the server.
+func (s *HTTPServer) Close() error {
+	s.service.UnsubscribeMessages(s.msgQueue)
 	return nil
 }
 
@@ -114,15 +108,7 @@ func (s *HTTPServer) sseMessages(w http.ResponseWriter, r *http.Request) {
 				"err", r.Context().Err())
 			return
 
-		case <-s.msgQueueSignal:
-		}
-
-		s.msgQueueMutex.Lock()
-		batch := s.msgQueue
-		s.msgQueue = nil
-		s.msgQueueMutex.Unlock()
-
-		for _, msg := range batch {
+		case msg := <-s.msgQueue:
 			b, err := protojson.Marshal(msg)
 			if err != nil {
 				s.logger.Error(
