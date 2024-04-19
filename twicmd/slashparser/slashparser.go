@@ -215,6 +215,12 @@ func shLiteral(word *syntax.Word) (string, error) {
 }
 
 func assertHintedValue(value string, hint twicmdproto.CommandArgumentHint) error {
+	if hint != twicmdproto.CommandArgumentHint_COMMAND_ARGUMENT_HINT_UNSPECIFIED {
+		if value == "" {
+			return fmt.Errorf("value is required")
+		}
+	}
+
 	switch hint {
 	case twicmdproto.CommandArgumentHint_COMMAND_ARGUMENT_HINT_INTEGER:
 		_, err := strconv.Atoi(value)
