@@ -8,6 +8,7 @@ import (
 	"github.com/twipi/twipi/internal/xiter"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
+	"github.com/twipi/twipi/twisms"
 )
 
 // Service describes a command service capable of executing parsed commands
@@ -23,7 +24,9 @@ type Service interface {
 	Service(ctx context.Context) (*twicmdproto.Service, error)
 	// Execute executes the given command and returns the message body
 	// to be replied back to the sender.
-	Execute(context.Context, *twicmdproto.Command) (*twismsproto.MessageBody, error)
+	Execute(context.Context, *twismsproto.Message, *twicmdproto.Command) (*twismsproto.MessageBody, error)
+
+	twisms.MessageSubscriber
 }
 
 // validateService validates the twicmd service.

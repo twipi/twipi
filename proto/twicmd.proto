@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package twicmd;
 
+import "twisms.proto";
+
 option go_package = "github.com/twipi/twipi/proto/out/twicmdproto";
 
 // A service that provides commands to be executed.
@@ -65,4 +67,15 @@ message Command {
 message CommandArgument {
   string name = 1;
   string value = 2;
+}
+
+// The request sent on the POST /execute endpoint.
+message ExecuteCommandRequest {
+  Command command = 1;
+  twisms.Message message = 2;
+}
+
+// The response sent back to the user after executing a command.
+message ExecuteCommandResponse {
+  twisms.MessageBody body = 1;
 }

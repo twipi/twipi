@@ -119,7 +119,7 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 		return
 	}
 
-	body, err := service.Execute(ctx, command)
+	body, err := service.Execute(ctx, d.msg, command)
 	if err != nil {
 		d.replyError(ctx, "failed to execute command", err)
 		return
