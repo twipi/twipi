@@ -11,6 +11,7 @@ import (
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
+	"github.com/twipi/twipi/twisms"
 	"google.golang.org/protobuf/encoding/protojson"
 	"libdb.so/hrt"
 	"libdb.so/hrtproto"
@@ -26,6 +27,8 @@ type HTTPServer struct {
 	msgQueueMutex  sync.Mutex
 	msgQueueSignal chan struct{}
 }
+
+var _ twisms.MessageSender = (*HTTPServer)(nil)
 
 // NewHTTPServer creates a new HTTP server with the given service.
 func NewHTTPServer(service twicmd.Service, logger *slog.Logger) *HTTPServer {
@@ -44,10 +47,10 @@ func NewHTTPServer(service twicmd.Service, logger *slog.Logger) *HTTPServer {
 	return s
 }
 
-// EnqueueMessage enqueues a message to be processed by the server.
+// SendMessage enqueues a message to be processed by the server.
 // The message will be processed eventually as the server connects to the SSE
 // endpoint.
-func (s *HTTPServer) EnqueueMessage(msg *twismsproto.Message) {
+func (s *HTTPServer) SendMessage(ctx context.Context, msg *twismsproto.Message) error {
 	s.msgQueueMutex.Lock()
 	s.msgQueue = append(s.msgQueue, msg)
 	s.msgQueueMutex.Unlock()
@@ -62,6 +65,8 @@ func (s *HTTPServer) EnqueueMessage(msg *twismsproto.Message) {
 		"message.from", msg.From,
 		"message.to", msg.To,
 		"batch_size", len(s.msgQueue))
+
+	return nil
 }
 
 func (s *HTTPServer) getService(ctx context.Context, _ hrt.None) (*twicmdproto.Service, error) {
@@ -89,6 +94,10 @@ func (s *HTTPServer) sseMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.logger.Debug(
+		"SSE message stream connected",
+		"remote_addr", r.RemoteAddr)
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -98,7 +107,13 @@ func (s *HTTPServer) sseMessages(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			writeSSE(w, "error", "client disconnected")
+
+			s.logger.Debug(
+				"SSE message stream disconnected",
+				"remote_addr", r.RemoteAddr,
+				"err", r.Context().Err())
 			return
+
 		case <-s.msgQueueSignal:
 		}
 
