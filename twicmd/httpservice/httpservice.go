@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/twipi/twipi/internal/pubsub"
+	"github.com/twipi/twipi/internal/xcontainer"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
@@ -62,6 +63,8 @@ type HTTPService struct {
 	msgs   chan *twismsproto.Message
 	url    string
 	name   string
+
+	cachedService xcontainer.Expirable[*twicmdproto.Service]
 }
 
 var (
@@ -224,11 +227,13 @@ func (s *HTTPService) Name() string {
 
 // Service implements [twicmd.Service].
 func (s *HTTPService) Service(ctx context.Context) (*twicmdproto.Service, error) {
-	service := new(twicmdproto.Service)
-	if err := s.do(ctx, "GET", "/", nil, service); err != nil {
-		return nil, fmt.Errorf("failed to get service: %w", err)
-	}
-	return service, nil
+	return s.cachedService.RenewableValue(5*time.Minute, func() (*twicmdproto.Service, error) {
+		service := new(twicmdproto.Service)
+		if err := s.do(ctx, "GET", "/", nil, service); err != nil {
+			return nil, fmt.Errorf("failed to get service: %w", err)
+		}
+		return service, nil
+	})
 }
 
 // Execute implements [twicmd.Service].
