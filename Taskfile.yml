@@ -2,6 +2,7 @@ version: '3'
 
 env:
   GO_MODULE: github.com/twipi/twipi
+  STATE_DIR: /tmp/twipi
 
   PORT: 8080
   DISCORD_PORT: 8090
@@ -37,6 +38,7 @@ tasks:
       - |
         nix-instantiate \
           --eval --strict --json \
+          --argstr stateDir "$STATE_DIR" \
           --argstr port "$PORT" \
           --argstr discordPort "$DISCORD_PORT" \
           --argstr phoneNumber "$PHONE_NUMBER" \
