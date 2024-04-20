@@ -4,9 +4,9 @@ tasks:
   compile:
     watch: true
     sources:
-      - "*.proto"
+      - ./*.proto
     generates:
-      - out
+      - out/**/*.pb.go
     cmds:
       - rm -rf out
       - for: sources

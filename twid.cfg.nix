@@ -2,7 +2,7 @@
 	port,
 	discordPort,
 	phoneNumber,
-	stateDir,
+	stateDirectory,
 }:
 
 {
@@ -22,7 +22,7 @@
 				# Set up the persistent message queue using SQLite.
 				message_queue = {
 					sqlite = {
-						path = "${stateDir}/twid/wsbridge.sqlite3";
+						path = "${stateDirectory}/twid/wsbridge.sqlite3";
 						max_age = "1400h";
 					};
 				};

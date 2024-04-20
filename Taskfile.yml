@@ -2,7 +2,7 @@ version: '3'
 
 env:
   GO_MODULE: github.com/twipi/twipi
-  STATE_DIR: /tmp/twipi
+  STATE_DIRECTORY: /tmp/twipi
 
   PORT: 8080
   DISCORD_PORT: 8090
@@ -28,20 +28,25 @@ tasks:
       - build-config
 
   sqlc:
+    sources:
+      - sqlc.json
+      - "**/*.sql"
     cmds:
       - sqlc generate
 
   build-config:
+    sources:
+      - twid.cfg.nix
     generates:
       - twid.json
     cmds:
       - |
         nix-instantiate \
           --eval --strict --json \
-          --argstr stateDir "$STATE_DIR" \
           --argstr port "$PORT" \
           --argstr discordPort "$DISCORD_PORT" \
           --argstr phoneNumber "$PHONE_NUMBER" \
+          --argstr stateDirectory "$STATE_DIRECTORY" \
           ./twid.cfg.nix > twid.json
 
   wsbridge-client:
