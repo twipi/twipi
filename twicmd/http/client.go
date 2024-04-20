@@ -34,8 +34,8 @@ import (
 	"libdb.so/hrtproto"
 )
 
-// HTTPServiceConfig is the expected configuration for an HTTP service.
-type HTTPServiceConfig struct {
+// ClientConfig is the expected configuration for an HTTP service.
+type ClientConfig struct {
 	// Name is the name of the service.
 	Name string `json:"name"`
 	// URL is the base URL of the HTTP service.
@@ -46,17 +46,17 @@ func init() {
 	twid.RegisterTwicmdService(twid.TwicmdService{
 		Name: "http",
 		New: func(cfg json.RawMessage, logger *slog.Logger) (twicmd.Service, error) {
-			var config HTTPServiceConfig
+			var config ClientConfig
 			if err := json.Unmarshal(cfg, &config); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal HTTP service config: %w", err)
 			}
-			return NewHTTPService(config.Name, config.URL, logger), nil
+			return NewClient(config.Name, config.URL, logger), nil
 		},
 	})
 }
 
-// HTTPService wraps an HTTP API and implements [twicmd.Service].
-type HTTPService struct {
+// Client wraps an HTTP API and implements [twicmd.Service].
+type Client struct {
 	client *http.Client
 	logger *slog.Logger
 	subs   pubsub.Subscriber[*twismsproto.Message]
@@ -68,14 +68,14 @@ type HTTPService struct {
 }
 
 var (
-	_ twicmd.Service           = (*HTTPService)(nil)
-	_ twisms.MessageSubscriber = (*HTTPService)(nil)
-	_ twid.Starter             = (*HTTPService)(nil)
+	_ twicmd.Service           = (*Client)(nil)
+	_ twisms.MessageSubscriber = (*Client)(nil)
+	_ twid.Starter             = (*Client)(nil)
 )
 
-// NewHTTPService creates a new HTTP service with the given URL.
-func NewHTTPService(serviceName, url string, logger *slog.Logger) *HTTPService {
-	return &HTTPService{
+// NewClient creates a new HTTP service with the given URL.
+func NewClient(serviceName, url string, logger *slog.Logger) *Client {
+	return &Client{
 		client: http.DefaultClient,
 		logger: logger,
 		msgs:   make(chan *twismsproto.Message),
@@ -85,7 +85,7 @@ func NewHTTPService(serviceName, url string, logger *slog.Logger) *HTTPService {
 }
 
 // Start implements [twid.Starter].
-func (s *HTTPService) Start(ctx context.Context) error {
+func (s *Client) Start(ctx context.Context) error {
 	errg, ctx := errgroup.WithContext(ctx)
 
 	errg.Go(func() error {
@@ -118,7 +118,7 @@ func (s *HTTPService) Start(ctx context.Context) error {
 	return errg.Wait()
 }
 
-func (s *HTTPService) runMessagesSSE(ctx context.Context) error {
+func (s *Client) runMessagesSSE(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", s.url+"/messages", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -209,24 +209,24 @@ func (s *HTTPService) runMessagesSSE(ctx context.Context) error {
 }
 
 // SubscribeMessages implements [twisms.MessageSubscriber].
-func (s *HTTPService) SubscribeMessages(ch chan<- *twismsproto.Message, filters *twismsproto.MessageFilters) {
+func (s *Client) SubscribeMessages(ch chan<- *twismsproto.Message, filters *twismsproto.MessageFilters) {
 	s.subs.Subscribe(ch, func(msg *twismsproto.Message) bool {
 		return twisms.FilterMessage(filters, msg)
 	})
 }
 
 // UnsubscribeMessages implements [twisms.MessageSubscriber].
-func (s *HTTPService) UnsubscribeMessages(ch chan<- *twismsproto.Message) {
+func (s *Client) UnsubscribeMessages(ch chan<- *twismsproto.Message) {
 	s.subs.Unsubscribe(ch)
 }
 
 // Name implements [twicmd.Service].
-func (s *HTTPService) Name() string {
+func (s *Client) Name() string {
 	return s.name
 }
 
 // Service implements [twicmd.Service].
-func (s *HTTPService) Service(ctx context.Context) (*twicmdproto.Service, error) {
+func (s *Client) Service(ctx context.Context) (*twicmdproto.Service, error) {
 	return s.cachedService.RenewableValue(5*time.Minute, func() (*twicmdproto.Service, error) {
 		service := new(twicmdproto.Service)
 		if err := s.do(ctx, "GET", "/", nil, service); err != nil {
@@ -237,7 +237,7 @@ func (s *HTTPService) Service(ctx context.Context) (*twicmdproto.Service, error)
 }
 
 // Execute implements [twicmd.Service].
-func (s *HTTPService) Execute(ctx context.Context, req *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
+func (s *Client) Execute(ctx context.Context, req *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
 	resp := new(twicmdproto.ExecuteResponse)
 	if err := s.do(ctx, "POST", "/execute", req, resp); err != nil {
 		return nil, fmt.Errorf("failed to execute command: %w", err)
@@ -245,7 +245,7 @@ func (s *HTTPService) Execute(ctx context.Context, req *twicmdproto.ExecuteReque
 	return resp, nil
 }
 
-func (s *HTTPService) do(ctx context.Context, method, path string, body, dst proto.Message) error {
+func (s *Client) do(ctx context.Context, method, path string, body, dst proto.Message) error {
 	var reqBody io.Reader
 	if body != nil {
 		b, err := proto.Marshal(body)

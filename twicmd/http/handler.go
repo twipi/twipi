@@ -16,8 +16,8 @@ import (
 	"libdb.so/hrtproto"
 )
 
-// HTTPServer wraps a [twicmd.Service] and turns it into an HTTP server.
-type HTTPServer struct {
+// Handler wraps a [twicmd.Service] and turns it into an HTTP server.
+type Handler struct {
 	service  twicmd.Service
 	router   *chi.Mux
 	logger   *slog.Logger
@@ -25,16 +25,16 @@ type HTTPServer struct {
 }
 
 var (
-	_ http.Handler = (*HTTPServer)(nil)
-	_ io.Closer    = (*HTTPServer)(nil)
+	_ http.Handler = (*Handler)(nil)
+	_ io.Closer    = (*Handler)(nil)
 )
 
-// NewHTTPServer creates a new HTTP server with the given service.
-func NewHTTPServer(service twicmd.Service, logger *slog.Logger) *HTTPServer {
+// NewHandler creates a new HTTP server with the given service.
+func NewHandler(service twicmd.Service, logger *slog.Logger) *Handler {
 	msgQueue := make(chan *twismsproto.Message)
 	service.SubscribeMessages(msgQueue, nil)
 
-	s := &HTTPServer{
+	s := &Handler{
 		router:   chi.NewRouter(),
 		service:  service,
 		msgQueue: msgQueue,
@@ -53,25 +53,25 @@ func NewHTTPServer(service twicmd.Service, logger *slog.Logger) *HTTPServer {
 }
 
 // ServeHTTP implements the [http.Handler] interface.
-func (s *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
 }
 
 // Close frees resources used by the server.
-func (s *HTTPServer) Close() error {
+func (s *Handler) Close() error {
 	s.service.UnsubscribeMessages(s.msgQueue)
 	return nil
 }
 
-func (s *HTTPServer) getService(ctx context.Context, _ hrt.None) (*twicmdproto.Service, error) {
+func (s *Handler) getService(ctx context.Context, _ hrt.None) (*twicmdproto.Service, error) {
 	return s.service.Service(ctx)
 }
 
-func (s *HTTPServer) execute(ctx context.Context, req *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
+func (s *Handler) execute(ctx context.Context, req *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
 	return s.service.Execute(ctx, req)
 }
 
-func (s *HTTPServer) sseMessages(w http.ResponseWriter, r *http.Request) {
+func (s *Handler) sseMessages(w http.ResponseWriter, r *http.Request) {
 	if _, ok := w.(http.Flusher); !ok {
 		// TODO: consider long polling as a fallback.
 		http.Error(w, "streaming not supported", http.StatusNotImplemented)
