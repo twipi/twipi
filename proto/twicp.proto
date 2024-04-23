@@ -30,6 +30,7 @@ message OptionType {
   string name = 2;
   // The human-readable description of the option.
   string description = 3;
+  // The type of the option.
   oneof type {
     StringType string = 10;
     NumberType int = 11;

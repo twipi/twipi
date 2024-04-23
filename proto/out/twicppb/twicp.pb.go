@@ -164,6 +164,8 @@ type OptionType struct {
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// The human-readable description of the option.
 	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// The type of the option.
+	//
 	// Types that are assignable to Type:
 	//
 	//	*OptionType_String_

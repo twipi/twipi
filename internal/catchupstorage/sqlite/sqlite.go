@@ -50,6 +50,9 @@ func NewMessageStorage(ctx context.Context, cfg *StorageConfig, logger *slog.Log
 		return nil, fmt.Errorf("sqlite_path is required")
 	}
 
+	logger.Info(
+		"creating SQLite message storage")
+
 	db, err := sql.Open("sqlite", cfg.Path)
 	if err != nil {
 		return nil, fmt.Errorf("could not open SQLite database: %w", err)

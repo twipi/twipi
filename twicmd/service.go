@@ -36,21 +36,21 @@ func validateService(service *twicmdproto.Service) error {
 	// TODO: validate command names
 	for _, cmd := range service.Commands {
 		if cmd.Name == "" {
-			return fmt.Errorf("service %q: empty command name", service.Name)
+			return fmt.Errorf("empty command name")
 		}
 
 		if len(cmd.ArgumentPositions) > 0 {
 			for _, name := range cmd.ArgumentPositions {
 				if cmd.Arguments[name] == nil {
 					return fmt.Errorf(
-						"service %q: command %q: missing argument %q",
-						service.Name, cmd.Name, name)
+						"command %q: missing argument %q",
+						cmd.Name, name)
 				}
 			}
 		} else if cmd.ArgumentTrailing {
 			return fmt.Errorf(
-				"service %q: command %q: trailing arguments are not supported",
-				service.Name, cmd.Name)
+				"command %q: trailing arguments are not supported",
+				cmd.Name)
 		}
 	}
 

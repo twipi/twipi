@@ -22,7 +22,7 @@
 				# Set up the persistent message queue using SQLite.
 				message_queue = {
 					sqlite = {
-						path = "${stateDirectory}/twid/wsbridge.sqlite3";
+						path = "${stateDirectory}/wsbridge-queue.sqlite3";
 						max_age = "1400h";
 					};
 				};
@@ -39,7 +39,11 @@
 			{
 				module = "http";
 				name = "discord";
-				base_url = "localhost:${discordPort}";
+				base_url = "http://localhost:${discordPort}";
+				control_panel = {
+					module = "http";
+					base_url = "http://localhost:${discordPort}/cp";
+				};
 			}
 		];
 	};

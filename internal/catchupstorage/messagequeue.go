@@ -71,6 +71,7 @@ func (mq *MessageQueue) Close() error {
 			"err", err)
 		return err
 	}
+	mq.logger.Debug("closed message storage")
 	return nil
 }
 

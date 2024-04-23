@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/twipi/twipi/internal/pubsub"
+	"github.com/twipi/pubsub"
 	"github.com/twipi/twipi/internal/xcontainer"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
@@ -30,16 +30,17 @@ import (
 	"github.com/twipi/twipi/twisms"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"libdb.so/hrtproto"
+	"libdb.so/hrt"
+	"libdb.so/hrtclient"
+	"libdb.so/hrtproto/hrtclientproto"
 )
 
 // ClientConfig is the expected configuration for an HTTP service.
 type ClientConfig struct {
 	// Name is the name of the service.
 	Name string `json:"name"`
-	// URL is the base URL of the HTTP service.
-	URL string `json:"url"`
+	// BaseURL is the base BaseURL of the HTTP service.
+	BaseURL string `json:"base_url"`
 }
 
 func init() {
@@ -50,19 +51,20 @@ func init() {
 			if err := json.Unmarshal(cfg, &config); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal HTTP service config: %w", err)
 			}
-			return NewClient(config.Name, config.URL, logger), nil
+			return NewClient(config.Name, config.BaseURL, logger), nil
 		},
 	})
 }
 
 // Client wraps an HTTP API and implements [twicmd.Service].
 type Client struct {
-	client *http.Client
-	logger *slog.Logger
-	subs   pubsub.Subscriber[*twismsproto.Message]
-	msgs   chan *twismsproto.Message
-	url    string
-	name   string
+	httpClient *http.Client
+	hrtClient  *hrtclient.Client
+	logger     *slog.Logger
+	subs       pubsub.Subscriber[*twismsproto.Message]
+	msgs       chan *twismsproto.Message
+	baseURL    string
+	name       string
 
 	cachedService xcontainer.Expirable[*twicmdproto.Service]
 }
@@ -74,13 +76,20 @@ var (
 )
 
 // NewClient creates a new HTTP service with the given URL.
-func NewClient(serviceName, url string, logger *slog.Logger) *Client {
+func NewClient(serviceName, baseURL string, logger *slog.Logger) *Client {
 	return &Client{
-		client: http.DefaultClient,
-		logger: logger,
-		msgs:   make(chan *twismsproto.Message),
-		url:    url,
-		name:   serviceName,
+		httpClient: http.DefaultClient,
+		hrtClient: hrtclient.NewClient(baseURL, hrtclient.CombinedCodec{
+			Encoder: hrtclientproto.ProtoJSONCodec,
+			Decoder: hrtclient.ErrorHandledDecoder{
+				Success: hrtclientproto.ProtoJSONCodec,
+				Error:   hrtclient.TextErrorDecoder,
+			},
+		}),
+		logger:  logger,
+		msgs:    make(chan *twismsproto.Message),
+		baseURL: baseURL,
+		name:    serviceName,
 	}
 }
 
@@ -119,12 +128,12 @@ func (s *Client) Start(ctx context.Context) error {
 }
 
 func (s *Client) runMessagesSSE(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", s.url+"/messages", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", s.baseURL+"/messages", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := s.client.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -225,12 +234,17 @@ func (s *Client) Name() string {
 	return s.name
 }
 
+var (
+	routeService = hrtclient.GET[hrt.None, *twicmdproto.Service]("/")
+	routeExecute = hrtclient.POST[*twicmdproto.ExecuteRequest, *twicmdproto.ExecuteResponse]("/execute")
+)
+
 // Service implements [twicmd.Service].
 func (s *Client) Service(ctx context.Context) (*twicmdproto.Service, error) {
 	return s.cachedService.RenewableValue(5*time.Minute, func() (*twicmdproto.Service, error) {
-		service := new(twicmdproto.Service)
-		if err := s.do(ctx, "GET", "/", nil, service); err != nil {
-			return nil, fmt.Errorf("failed to get service: %w", err)
+		service, err := routeService(ctx, s.hrtClient, hrt.Empty)
+		if err != nil {
+			return nil, err
 		}
 		return service, nil
 	})
@@ -238,65 +252,9 @@ func (s *Client) Service(ctx context.Context) (*twicmdproto.Service, error) {
 
 // Execute implements [twicmd.Service].
 func (s *Client) Execute(ctx context.Context, req *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
-	resp := new(twicmdproto.ExecuteResponse)
-	if err := s.do(ctx, "POST", "/execute", req, resp); err != nil {
-		return nil, fmt.Errorf("failed to execute command: %w", err)
+	resp, err := routeExecute(ctx, s.hrtClient, req)
+	if err != nil {
+		return nil, err
 	}
 	return resp, nil
-}
-
-func (s *Client) do(ctx context.Context, method, path string, body, dst proto.Message) error {
-	var reqBody io.Reader
-	if body != nil {
-		b, err := proto.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("failed to marshal request body as Protobuf: %w", err)
-		}
-		reqBody = bytes.NewReader(b)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, s.url+path, reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Accept", "application/protobuf")
-	if reqBody != nil {
-		req.Header.Set("Content-Type", "application/protobuf")
-	}
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		if len(respBody) > 0 {
-			return fmt.Errorf(
-				"unexpected status code %d: %s",
-				resp.StatusCode, string(respBody))
-		}
-		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
-	}
-
-	if dst != nil {
-		protoMessage := resp.Header.Get(hrtproto.MessageNameHeader)
-		if protoMessage != "" && protoMessage != string(proto.MessageName(dst)) {
-			return fmt.Errorf(
-				"unexpected response message type %q, wanted %q",
-				protoMessage, proto.MessageName(dst))
-		}
-
-		if err := proto.Unmarshal(respBody, dst); err != nil {
-			return fmt.Errorf("failed to unmarshal response as Protobuf: %w", err)
-		}
-	}
-
-	return nil
 }

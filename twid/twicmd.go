@@ -50,6 +50,11 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 			return fmt.Errorf("unknown twicmd parser %s", cfg.Module)
 		}
 
+		logger := logger.With(
+			"module", "twicmd",
+			"twicmd.component", "parser",
+			"twicmd.parser", cfg.Module)
+
 		raw, _ := cfg.MarshalJSON()
 
 		parser, err := module.New(raw, logger)
@@ -58,6 +63,7 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 		}
 
 		parsers = append(parsers, parser)
+		lifecycle.add(parser, logger)
 	}
 
 	services := twicmd.NewServiceLookup()
@@ -67,6 +73,11 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 			return fmt.Errorf("unknown twicmd service %s", cfg.Module)
 		}
 
+		logger := logger.With(
+			"module", "twicmd",
+			"twicmd.component", "service",
+			"twicmd.service", cfg.Module)
+
 		raw, _ := cfg.MarshalJSON()
 
 		service, err := module.New(raw, logger)
@@ -75,6 +86,21 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 		}
 
 		services.Register(service)
+		lifecycle.add(service, logger)
+
+		// if cfg.ControlPanel != nil {
+		// 	module, ok := twicpModules[cfg.ControlPanel.Module]
+		// 	if !ok {
+		// 		return fmt.Errorf("unknown twicp module %s", cfg.ControlPanel.Module)
+		// 	}
+		//
+		// 	raw, _ := cfg.ControlPanel.MarshalJSON()
+		//
+		// 	cp, err := module.New(raw, logger)
+		// 	if err != nil {
+		// 		return fmt.Errorf("cannot create twicp controller %s: %w", cfg.ControlPanel.Module, err)
+		// 	}
+		// }
 	}
 
 	manager := &twicmd.Manager{
@@ -85,6 +111,6 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 		Opts:     twicmd.StartOpts{},
 	}
 
-	lifecycle.add(manager, logger)
+	lifecycle.add(manager, manager.Logger)
 	return nil
 }

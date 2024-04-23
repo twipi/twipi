@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/twipi/cfgutil"
-	"github.com/twipi/twipi/internal/pubsub"
+	"github.com/twipi/pubsub"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
 	"github.com/twipi/twipi/twid"

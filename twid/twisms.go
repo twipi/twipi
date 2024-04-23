@@ -42,7 +42,6 @@ func initializeTwisms(cfg config.Root, lifecycle *lifecycle, router *chi.Mux, lo
 		logger := logger.With(
 			"module", "twisms",
 			"twisms_module", module.Name)
-		logger.Info("initializing twisms module")
 
 		serviceCfgRaw, _ := serviceCfg.MarshalJSON()
 
@@ -58,6 +57,7 @@ func initializeTwisms(cfg config.Root, lifecycle *lifecycle, router *chi.Mux, lo
 		}
 
 		services = append(services, service)
+		lifecycle.add(service, logger)
 	}
 
 	return &twismsWrapper{services: services}, nil

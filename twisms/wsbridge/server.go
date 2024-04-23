@@ -15,7 +15,7 @@ import (
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twipi/cfgutil"
 	"github.com/twipi/twipi/internal/catchupstorage"
-	"github.com/twipi/twipi/internal/pubsub"
+	"github.com/twipi/pubsub"
 	"github.com/twipi/twipi/internal/xcontainer"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
@@ -166,14 +166,16 @@ func newServerService(ctx context.Context, h *ServerService) (*serverService, er
 	var err error
 
 	if h.cfg.MessageQueue != nil {
-		queue, err = catchupstorage.NewMessageQueue(
-			ctx,
-			h.cfg.MessageQueue,
-			h.logger.With("module", "wsbridge_server.message_queue"))
+		logger := h.logger.With(slog.Group(
+			"wsbridge_server",
+			"module", "message_queue"))
+
+		queue, err = catchupstorage.NewMessageQueue(ctx, h.cfg.MessageQueue, logger)
 		if err != nil {
 			return nil, fmt.Errorf("could not create message queue: %w", err)
 		}
-		h.logger.Debug("using message queue")
+
+		logger.Debug("using message queue")
 	}
 
 	return &serverService{
@@ -189,9 +191,17 @@ func (s *serverService) Start(ctx context.Context) error {
 	s.subs.Subscribe(messages, nil)
 	defer s.subs.Unsubscribe(messages)
 
-	for msg := range messages {
-		s.SendMessage(ctx, msg)
+eventLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			break eventLoop
+		case msg := <-s.msgs:
+			s.SendMessage(ctx, msg)
+		}
 	}
+
+	s.logger.Info("stopped processing messages")
 
 	if err := s.queue.Close(); err != nil {
 		return fmt.Errorf("could not close message queue: %w", err)

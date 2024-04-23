@@ -193,6 +193,9 @@ func (p *Parser) parseNWords(s string, n int) ([]string, string, error) {
 	if n > 0 && len(words) < n {
 		return nil, "", fmt.Errorf("expected %d words, got %d", n, len(words))
 	}
+	if len(words) == 0 {
+		return nil, "", nil
+	}
 
 	lits := make([]string, len(words))
 	for i, word := range words {

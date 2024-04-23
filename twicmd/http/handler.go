@@ -38,6 +38,7 @@ func NewHandler(service twicmd.Service, logger *slog.Logger) *Handler {
 		router:   chi.NewRouter(),
 		service:  service,
 		msgQueue: msgQueue,
+		logger:   logger,
 	}
 
 	r := s.router

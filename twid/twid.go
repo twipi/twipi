@@ -15,6 +15,17 @@ import (
 	"libdb.so/hserve"
 )
 
+/*
+-- SHIT TO DO IN THE MORNING!!!
+1. fix twicmd service control panel. make it parse the proper http module then
+   create a new handler to put that control panel back to a handler
+2. add a convention for routes to list services and its control panel data
+   - GET /api/services - list all services
+   - GET /api/services/:name - the service's manual page
+   -  *  /api/services/:name/cp - forwarded straight to twicp/http.Handler
+--
+*/
+
 // Start starts the twid daemon. It runs until the context is canceled.
 func Start(ctx context.Context, cfg config.Root, logger *slog.Logger) error {
 	errg, ctx := errgroup.WithContext(ctx)

@@ -12,10 +12,12 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.1.0
 	github.com/spf13/pflag v1.0.5
 	github.com/twipi/cfgutil v0.0.0-20240229095544-ee831a14842a
+	github.com/twipi/pubsub v0.0.0-20240419070506-7024f4e9981d
 	golang.org/x/sync v0.6.0
 	google.golang.org/protobuf v1.33.0
-	libdb.so/hrt v0.0.0-20230610032842-abf58de78776
-	libdb.so/hrtproto v0.0.0-20240418200917-01082d47e355
+	libdb.so/hrt v0.0.0-20240421082846-86ff8f6e2d0e
+	libdb.so/hrtclient v0.0.0-20240421080023-4dbf5f693ee7
+	libdb.so/hrtproto v0.0.0-20240420095506-31b8f7cf483c
 	libdb.so/hserve v0.0.0-20230404043009-95e112a6e0a5
 	libdb.so/lazymigrate v0.0.0-20240221022551-223d9b492a64
 	modernc.org/sqlite v1.29.6
@@ -39,7 +41,8 @@ require (
 	github.com/prometheus/common v0.48.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/sys v0.19.0 // indirect
+	libdb.so/ctxt v0.0.0-20240229093153-2db38a5d3c12 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
 	modernc.org/libc v1.41.0 // indirect
 	modernc.org/mathutil v1.6.0 // indirect

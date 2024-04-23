@@ -106,7 +106,7 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 	}
 
 	if command == nil {
-		d.replyText(ctx, "cannot understand command (no available parser)")
+		d.replyText(ctx, "Cannot understand command (no available parser)")
 		return
 	}
 
@@ -124,6 +124,12 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 		Message: d.msg,
 	})
 	if err != nil {
+		d.logger.Error(
+			"failed to execute command",
+			"service", service.Name(),
+			"command", command.Command,
+			"message", d.msg.String(),
+			"err", err)
 		d.replyText(ctx, "An error occurred while executing the command.")
 		return
 	}
