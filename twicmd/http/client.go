@@ -23,6 +23,7 @@ import (
 
 	"github.com/twipi/pubsub"
 	"github.com/twipi/twipi/internal/xcontainer"
+	"github.com/twipi/twipi/proto/out/twicmdcfgpb"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
@@ -242,19 +243,24 @@ var (
 // Service implements [twicmd.Service].
 func (s *Client) Service(ctx context.Context) (*twicmdproto.Service, error) {
 	return s.cachedService.RenewableValue(5*time.Minute, func() (*twicmdproto.Service, error) {
-		service, err := routeService(ctx, s.hrtClient, hrt.Empty)
-		if err != nil {
-			return nil, err
-		}
-		return service, nil
+		return routeService(ctx, s.hrtClient, hrt.Empty)
 	})
 }
 
 // Execute implements [twicmd.Service].
 func (s *Client) Execute(ctx context.Context, req *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
-	resp, err := routeExecute(ctx, s.hrtClient, req)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return routeExecute(ctx, s.hrtClient, req)
+}
+
+var (
+	routeConfigurationValues      = hrtclient.GET[*twicmdcfgpb.OptionsRequest, *twicmdcfgpb.OptionsResponse]("/configuration")
+	routeApplyConfigurationValues = hrtclient.PATCH[*twicmdcfgpb.ApplyRequest, *twicmdcfgpb.ApplyResponse]("/configuration")
+)
+
+func (s *Client) ConfigurationValues(ctx context.Context, req *twicmdcfgpb.OptionsRequest) (*twicmdcfgpb.OptionsResponse, error) {
+	return routeConfigurationValues(ctx, s.hrtClient, req)
+}
+
+func (s *Client) ApplyConfigurationValues(ctx context.Context, req *twicmdcfgpb.ApplyRequest) (*twicmdcfgpb.ApplyResponse, error) {
+	return routeApplyConfigurationValues(ctx, s.hrtClient, req)
 }

@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package twicmd;
 
+import "twicmdcfg.proto";
 import "twisms.proto";
 
 option go_package = "github.com/twipi/twipi/proto/out/twicmdproto";
@@ -19,6 +20,8 @@ message Service {
   optional string icon_url = 4;
   // The optional brand color of the service.
   optional string color = 5;
+  // The optional control panel schema of the service.
+  optional twicmdcfg.Schema options_schema = 6;
 }
 
 // A description of a command that the service provides.

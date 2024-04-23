@@ -78,9 +78,6 @@ func (t *TwicmdParser) MarshalJSON() ([]byte, error) {
 type TwicmdService struct {
 	// Module is the name of the Twicmd module to use for this service.
 	Module string `json:"module"`
-	// ControlPanelURL configures the URL to the control panel (twicp) API for
-	// this service, if present.
-	ControlPanelURL TwicpConfig `json:"control_panel,omitempty"`
 
 	raw json.RawMessage
 }
@@ -96,27 +93,5 @@ func (t *TwicmdService) UnmarshalJSON(b []byte) error {
 }
 
 func (t *TwicmdService) MarshalJSON() ([]byte, error) {
-	return t.raw, nil
-}
-
-// TwicpConfig is the configuration for a Twicp controller.
-type TwicpConfig struct {
-	// Module is the name of the Twicp module to use for this controller.
-	Module string `json:"module"`
-
-	raw json.RawMessage
-}
-
-func (t *TwicpConfig) UnmarshalJSON(b []byte) error {
-	type raw TwicpConfig
-	if err := json.Unmarshal(b, (*raw)(t)); err != nil {
-		return err
-	}
-	*t = TwicpConfig(*t)
-	t.raw = json.RawMessage(bytes.Clone(b))
-	return nil
-}
-
-func (t *TwicpConfig) MarshalJSON() ([]byte, error) {
 	return t.raw, nil
 }

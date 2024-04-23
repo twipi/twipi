@@ -14,7 +14,6 @@ import (
 
 	_ "github.com/twipi/twipi/twicmd/http"
 	_ "github.com/twipi/twipi/twicmd/slashparser"
-	_ "github.com/twipi/twipi/twicp/http"
 	_ "github.com/twipi/twipi/twisms/wsbridge"
 )
 

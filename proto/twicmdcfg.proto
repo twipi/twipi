@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package twicp;
+package twicmdcfg;
 
-option go_package = "github.com/twipi/twipi/proto/out/twicppb";
+option go_package = "github.com/twipi/twipi/proto/out/twicmdcfgpb";
 
 // The schema of the options available for the control panel.
 message Schema {
@@ -72,16 +72,23 @@ message OptionValue {
   }
 }
 
-// A list of option values.
-message OptionValues {
+message OptionsRequest {
+  // The phone number of the user to get the options for.
+  string phone_number = 1;
+}
+
+message OptionsResponse {
+  // The list of option values for the user.
   repeated OptionValue values = 1;
 }
 
 // A request to apply a list of options.
 message ApplyRequest {
+  // The phone number of the user to apply the options to.
+  string phone_number = 1;
   // The list of options to apply.
   // Only the values specified here will be updated.
-  repeated OptionValue values = 1;
+  repeated OptionValue values = 2;
 }
 
 // The result of applying a list of options.

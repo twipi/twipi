@@ -6,6 +6,7 @@ import (
 
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twipi/twipi/internal/xiter"
+	"github.com/twipi/twipi/proto/out/twicmdcfgpb"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/twisms"
 )
@@ -26,6 +27,21 @@ type Service interface {
 	Execute(context.Context, *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error)
 
 	twisms.MessageSubscriber
+}
+
+// ConfigurableService describes a command service that can be configured.
+// It extends [Service] with configuration management for the user.
+//
+// Note that in order for a service to be configurable by the user, it needs to:
+//  1. Implement this interface, and
+//  2. Have the twicmdpb.Service.options_schema field set.
+type ConfigurableService interface {
+	Service
+	// ConfigurationValues returns the current vluaes of the options.
+	ConfigurationValues(context.Context, *twicmdcfgpb.OptionsRequest) (*twicmdcfgpb.OptionsResponse, error)
+	// ApplyConfigurationValues applies the values of the options.
+	// Only the values given in the values list should be changed.
+	ApplyConfigurationValues(context.Context, *twicmdcfgpb.ApplyRequest) (*twicmdcfgpb.ApplyResponse, error)
 }
 
 // validateService validates the twicmd service.

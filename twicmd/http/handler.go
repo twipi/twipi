@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/twipi/twipi/proto/out/twicmdcfgpb"
 	"github.com/twipi/twipi/proto/out/twicmdproto"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
@@ -46,9 +47,15 @@ func NewHandler(service twicmd.Service, logger *slog.Logger) *Handler {
 		Encoder:     hrtproto.ProtoJSONEncoder,
 		ErrorWriter: hrt.TextErrorWriter,
 	}))
+
 	r.Get("/", hrt.Wrap(s.getService))
 	r.Get("/messages", s.sseMessages)
 	r.Post("/execute", hrt.Wrap(s.execute))
+
+	r.Route("/configuration", func(r chi.Router) {
+		r.Get("/", hrt.Wrap(s.getConfigurationValues))
+		r.Patch("/", hrt.Wrap(s.applyConfigurationValues))
+	})
 
 	return s
 }
@@ -118,4 +125,20 @@ func writeSSE(w http.ResponseWriter, event, data string) {
 	fmt.Fprintf(w, "event: %s\n", event)
 	fmt.Fprintf(w, "data: %s\n\n", data)
 	w.(http.Flusher).Flush()
+}
+
+func (s *Handler) getConfigurationValues(ctx context.Context, req *twicmdcfgpb.OptionsRequest) (*twicmdcfgpb.OptionsResponse, error) {
+	configurable, ok := s.service.(twicmd.ConfigurableService)
+	if !ok {
+		return nil, hrt.NewHTTPError(http.StatusNotAcceptable, "service is not configurable")
+	}
+	return configurable.ConfigurationValues(ctx, req)
+}
+
+func (s *Handler) applyConfigurationValues(ctx context.Context, req *twicmdcfgpb.ApplyRequest) (*twicmdcfgpb.ApplyResponse, error) {
+	configurable, ok := s.service.(twicmd.ConfigurableService)
+	if !ok {
+		return nil, hrt.NewHTTPError(http.StatusNotAcceptable, "service is not configurable")
+	}
+	return configurable.ApplyConfigurationValues(ctx, req)
 }

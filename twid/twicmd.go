@@ -87,20 +87,6 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 
 		services.Register(service)
 		lifecycle.add(service, logger)
-
-		// if cfg.ControlPanel != nil {
-		// 	module, ok := twicpModules[cfg.ControlPanel.Module]
-		// 	if !ok {
-		// 		return fmt.Errorf("unknown twicp module %s", cfg.ControlPanel.Module)
-		// 	}
-		//
-		// 	raw, _ := cfg.ControlPanel.MarshalJSON()
-		//
-		// 	cp, err := module.New(raw, logger)
-		// 	if err != nil {
-		// 		return fmt.Errorf("cannot create twicp controller %s: %w", cfg.ControlPanel.Module, err)
-		// 	}
-		// }
 	}
 
 	manager := &twicmd.Manager{
