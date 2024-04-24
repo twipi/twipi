@@ -41,6 +41,34 @@ func FilterMessage(filters *twismsproto.MessageFilters, msg *twismsproto.Message
 type MessageSender interface {
 	// SendMessage sends an SMS message to the given recipient.
 	SendMessage(ctx context.Context, msg *twismsproto.Message) error
+	// SendingNumber returns the number to send messages from and the cost of
+	// sending a message. The cost should be within [0.0, 1.0]. Lower values
+	// are chosen first.
+	//
+	// TODO: figure out a better way to load-balance a pool of phone numbers.
+	// Perhaps that is worthy of its own service.
+	SendingNumber() (string, float64)
+}
+
+// SendTextMessage sends an SMS message with the given text from the given
+// sender to the given recipient.
+func SendTextMessage(ctx context.Context, s MessageSender, from, to, text string) error {
+	return s.SendMessage(ctx, &twismsproto.Message{
+		From: from,
+		To:   to,
+		Body: &twismsproto.MessageBody{
+			Text: &twismsproto.TextBody{
+				Text: text,
+			},
+		},
+	})
+}
+
+// SendAutoTextMessage sends an SMS message with the given text from the
+// service's sending number to the given recipient.
+func SendAutoTextMessage(ctx context.Context, s MessageSender, to, text string) error {
+	from, _ := s.SendingNumber()
+	return SendTextMessage(ctx, s, from, to, text)
 }
 
 // MessageReplier describes a service that can reply to messages.

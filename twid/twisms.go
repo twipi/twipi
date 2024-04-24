@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -90,6 +91,19 @@ func (s *twismsWrapper) SendMessage(ctx context.Context, msg *twismsproto.Messag
 		}
 	}
 	return err
+}
+
+func (s *twismsWrapper) SendingNumber() (string, float64) {
+	var number string
+	score := math.Inf(1)
+	for _, sender := range s.services {
+		n, s := sender.SendingNumber()
+		if s < score {
+			number = n
+			score = s
+		}
+	}
+	return number, score
 }
 
 func (s *twismsWrapper) ReplyMessage(ctx context.Context, msg *twismsproto.Message, body *twismsproto.MessageBody) error {

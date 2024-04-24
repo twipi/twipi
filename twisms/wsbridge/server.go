@@ -14,8 +14,8 @@ import (
 
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/twipi/cfgutil"
-	"github.com/twipi/twipi/internal/catchupstorage"
 	"github.com/twipi/pubsub"
+	"github.com/twipi/twipi/internal/catchupstorage"
 	"github.com/twipi/twipi/internal/xcontainer"
 	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/proto/out/wsbridgeproto"
@@ -95,6 +95,10 @@ func NewServerService(cfg ServerServiceConfig, logger *slog.Logger) *ServerServi
 
 // Start implements [twid.Starter].
 func (s *ServerService) Start(ctx context.Context) error {
+	if len(s.cfg.PhoneNumbers) < 1 {
+		return errors.New("no phone numbers configured")
+	}
+
 	errg, ctx := errgroup.WithContext(ctx)
 
 	errg.Go(func() error {
@@ -153,6 +157,11 @@ func (s *ServerService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 	}
 
 	return ss.SendMessage(ctx, msg)
+}
+
+func (s *ServerService) SendingNumber() (string, float64) {
+	// not round robin but just the first number
+	return s.cfg.PhoneNumbers[0], 0.0
 }
 
 type serverService struct {
@@ -286,6 +295,8 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			// TODO: filter out messages that aren't addressed to the server's
+			// phone numbers.
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

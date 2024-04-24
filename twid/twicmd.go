@@ -42,12 +42,12 @@ func RegisterTwicmdService(service TwicmdService) {
 	twicmdServices[service.Name] = service
 }
 
-func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageService, logger *slog.Logger) error {
+func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageService, logger *slog.Logger) (*twicmd.Manager, error) {
 	var parsers []twicmd.CommandParser
 	for _, cfg := range cfg.Twicmd.Parsers {
 		module, ok := twicmdParsers[cfg.Module]
 		if !ok {
-			return fmt.Errorf("unknown twicmd parser %s", cfg.Module)
+			return nil, fmt.Errorf("unknown twicmd parser %s", cfg.Module)
 		}
 
 		logger := logger.With(
@@ -59,7 +59,7 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 
 		parser, err := module.New(raw, logger)
 		if err != nil {
-			return fmt.Errorf("cannot create twicmd parser %s: %w", cfg.Module, err)
+			return nil, fmt.Errorf("cannot create twicmd parser %s: %w", cfg.Module, err)
 		}
 
 		parsers = append(parsers, parser)
@@ -70,7 +70,7 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 	for _, cfg := range cfg.Twicmd.Services {
 		module, ok := twicmdServices[cfg.Module]
 		if !ok {
-			return fmt.Errorf("unknown twicmd service %s", cfg.Module)
+			return nil, fmt.Errorf("unknown twicmd service %s", cfg.Module)
 		}
 
 		logger := logger.With(
@@ -82,7 +82,7 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 
 		service, err := module.New(raw, logger)
 		if err != nil {
-			return fmt.Errorf("cannot create twicmd service %s: %w", cfg.Module, err)
+			return nil, fmt.Errorf("cannot create twicmd service %s: %w", cfg.Module, err)
 		}
 
 		services.Register(service)
@@ -98,5 +98,5 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 	}
 
 	lifecycle.add(manager, manager.Logger)
-	return nil
+	return manager, nil
 }

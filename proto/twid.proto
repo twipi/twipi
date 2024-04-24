@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package twid;
+
+import "google/protobuf/timestamp.proto";
+import "twicmd.proto";
+import "twicmdcfg.proto";
+
+option go_package = "github.com/twipi/twipi/proto/out/twidpb";
+
+message LoginPhase1Request {
+  string phone_number = 1;
+}
+
+message LoginPhase2Request {
+  string phone_number = 1;
+  string code = 2;
+}
+
+message LoginResponse {
+  string token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message ListServicesRequest {
+}
+
+message ListServicesResponse {
+  repeated ServiceListItem services = 1;
+}
+
+message ServiceListItem {
+  string name = 1;
+  string description = 2;
+  optional string icon_url = 3;
+  optional string color = 4;
+}
+
+message GetServiceRequest {
+  string service = 1;
+}
+
+message GetServiceResponse {
+  twicmd.Service service = 1;
+}
+
+message GetControlPanelRequest {
+  string service = 1;
+}
+
+message GetControlPanelResponse {
+  twicmd.Service service = 1;
+  repeated twicmdcfg.OptionValue values = 2;
+}

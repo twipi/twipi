@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/twipi/twipi/internal/srvutil"
+	"github.com/twipi/twipi/twid/api"
 	"github.com/twipi/twipi/twid/config"
 	"golang.org/x/sync/errgroup"
 	"libdb.so/hserve"
@@ -42,9 +43,13 @@ func Start(ctx context.Context, cfg config.Root, logger *slog.Logger) error {
 		return fmt.Errorf("failed to initialize TwiSMS: %w", err)
 	}
 
-	if err := initializeTwicmd(cfg, lifecycle, sms, logger); err != nil {
+	cmd, err := initializeTwicmd(cfg, lifecycle, sms, logger)
+	if err != nil {
 		return fmt.Errorf("failed to initialize Twicmd: %w", err)
 	}
+
+	router.Mount("/api/services",
+		api.New(sms, cmd, logger.With("module", "api")))
 
 	errg.Go(func() error {
 		logger.Info("starting all services")
