@@ -8,8 +8,8 @@ option go_package = "github.com/twipi/twipi/proto/out/twicmdcfgpb";
 message Schema {
   // The list of option categories.
   repeated OptionCategory categories = 2;
-  // The list of option types.
-  repeated OptionType types = 3;
+  // The list of options.
+  repeated OptionType options = 3;
 }
 
 // The list of options available for a given resource.
@@ -32,6 +32,7 @@ message OptionType {
   // The type of the option.
   oneof type {
     StringType string = 10;
+    StringListType string_list = 13;
     NumberType int = 11;
     SwitchType switch = 12;
   }
@@ -47,6 +48,15 @@ message StringType {
   // The client will only send over updated values, so the user may leave this
   // field alone.
   bool sensitive = 2;
+}
+
+// A string list option type.
+message StringListType {
+  // The regex to use for structuring string values into a prettier table.
+  // Each column in the table is named by the field in the structuring_fields
+  // list. Each submatch in the regex is a column in the table.
+  optional string structuring_regex = 1;
+  repeated string structurings = 2;
 }
 
 message NumberType {
@@ -66,9 +76,14 @@ message OptionValue {
   string id = 1;
   oneof value {
     string string = 10;
+    StringListValue string_list = 13;
     int64 int = 11;
     bool switch = 12;
   }
+}
+
+message StringListValue {
+  repeated string values = 1;
 }
 
 message OptionsRequest {
