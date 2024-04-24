@@ -6,7 +6,6 @@ option go_package = "github.com/twipi/twipi/proto/out/twicmdcfgpb";
 
 // The schema of the options available for the control panel.
 message Schema {
-  string service = 1;
   // The list of option categories.
   repeated OptionCategory categories = 2;
   // The list of option types.
