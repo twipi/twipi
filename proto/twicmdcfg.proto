@@ -56,7 +56,7 @@ message StringListType {
   // Each column in the table is named by the field in the structuring_fields
   // list. Each submatch in the regex is a column in the table.
   optional string structuring_regex = 1;
-  repeated string structurings = 2;
+  repeated string structuring_columns = 2;
 }
 
 message NumberType {
