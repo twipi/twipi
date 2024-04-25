@@ -30,6 +30,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/go-chi/cors v1.2.1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hexops/gotextdiff v1.0.3 // indirect

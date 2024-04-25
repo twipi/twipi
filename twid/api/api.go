@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/twipi/twipi/proto/out/twicmdcfgpb"
 	"github.com/twipi/twipi/proto/out/twidpb"
 	"github.com/twipi/twipi/twicmd"
@@ -37,7 +38,7 @@ func New(sms twisms.MessageSender, cmd *twicmd.Manager, logger *slog.Logger) htt
 	}
 
 	r := chi.NewMux()
-
+	r.Use(cors.AllowAll().Handler)
 	r.Use(middleware.CleanPath)
 	r.Use(hrt.Use(hrtOpts))
 
