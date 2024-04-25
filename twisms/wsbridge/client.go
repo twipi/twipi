@@ -259,6 +259,11 @@ func (s *ClientService) SendMessage(ctx context.Context, msg *twismsproto.Messag
 	return nil
 }
 
+func (s *ClientService) SendingNumber() (string, float64) {
+	// not round robin but just the first number
+	return s.cfg.PhoneNumbers[0], 0.0
+}
+
 // SubscribeMessages implements [twisms.MessageSubscriber].
 func (s *ClientService) SubscribeMessages(ch chan<- *twismsproto.Message, filters *twismsproto.MessageFilters) {
 	s.subs.Subscribe(ch, func(msg *twismsproto.Message) bool {
