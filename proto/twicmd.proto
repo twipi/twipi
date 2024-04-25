@@ -16,6 +16,9 @@ message Service {
   string description = 3;
   // The list of descriptions of commands that the service provides.
   repeated CommandDescription commands = 2;
+  // The human-readable name of the service.
+  // This name can be the full and properly captalized name of the service.
+  optional string human_name = 7;
   // The URL of the service's icon.
   optional string icon_url = 4;
   // The optional brand color of the service.
