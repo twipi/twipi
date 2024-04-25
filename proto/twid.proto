@@ -31,9 +31,11 @@ message ListServicesResponse {
 
 message ServiceListItem {
   string name = 1;
-  string description = 2;
-  optional string icon_url = 3;
-  optional string color = 4;
+  string description = 3;
+  optional string human_name = 7;
+  optional string website_url = 8;
+  optional string icon_url = 4;
+  optional string color = 5;
 }
 
 message GetServiceRequest {

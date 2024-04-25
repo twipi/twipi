@@ -19,6 +19,8 @@ message Service {
   // The human-readable name of the service.
   // This name can be the full and properly captalized name of the service.
   optional string human_name = 7;
+  // The URL to the service's official website, if any.
+  optional string website_url = 8;
   // The URL of the service's icon.
   optional string icon_url = 4;
   // The optional brand color of the service.
