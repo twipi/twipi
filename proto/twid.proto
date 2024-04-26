@@ -22,6 +22,9 @@ message LoginResponse {
   google.protobuf.Timestamp expires_at = 2;
 }
 
+message ListServicesRequest {
+}
+
 message ListServicesResponse {
   repeated ServiceListItem services = 1;
 }
@@ -35,8 +38,14 @@ message ServiceListItem {
   optional string color = 5;
 }
 
+message GetServiceRequest {
+}
+
 message GetServiceResponse {
   twicmd.Service service = 1;
+}
+
+message GetControlPanelRequest {
 }
 
 message GetControlPanelResponse {

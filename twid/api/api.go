@@ -75,7 +75,7 @@ type handler struct {
 	logger *slog.Logger
 }
 
-func (h *handler) listServices(ctx context.Context, _ hrt.None) (*twidpb.ListServicesResponse, error) {
+func (h *handler) listServices(ctx context.Context, req *twidpb.ListServicesRequest) (*twidpb.ListServicesResponse, error) {
 	var services []*twidpb.ServiceListItem
 	var err error
 
@@ -103,7 +103,7 @@ func (h *handler) listServices(ctx context.Context, _ hrt.None) (*twidpb.ListSer
 	}, nil
 }
 
-func (h *handler) getService(ctx context.Context, _ hrt.None) (*twidpb.GetServiceResponse, error) {
+func (h *handler) getService(ctx context.Context, req *twidpb.GetServiceRequest) (*twidpb.GetServiceResponse, error) {
 	serviceName := chi.URLParamFromCtx(ctx, "name")
 
 	service, err := h.cmd.Services.Lookup(ctx, serviceName)
@@ -119,7 +119,7 @@ func (h *handler) getService(ctx context.Context, _ hrt.None) (*twidpb.GetServic
 	}, nil
 }
 
-func (h *handler) getControlPanel(ctx context.Context, _ hrt.None) (*twidpb.GetControlPanelResponse, error) {
+func (h *handler) getControlPanel(ctx context.Context, req *twidpb.GetControlPanelRequest) (*twidpb.GetControlPanelResponse, error) {
 	serviceName := chi.URLParamFromCtx(ctx, "name")
 	session, _ := ctxt.From[authSession](ctx)
 
