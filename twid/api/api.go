@@ -89,6 +89,8 @@ func (h *handler) listServices(ctx context.Context, req *twidpb.ListServicesRequ
 		services = append(services, &twidpb.ServiceListItem{
 			Name:        service.Description.Name,
 			Description: service.Description.Description,
+			HumanName:   service.Description.HumanName,
+			WebsiteUrl:  service.Description.WebsiteUrl,
 			IconUrl:     service.Description.IconUrl,
 			Color:       service.Description.Color,
 		})
