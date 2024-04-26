@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/twipi/twipi/internal/srvutil"
 	"github.com/twipi/twipi/proto/out/twicmdcfgpb"
 	"github.com/twipi/twipi/proto/out/twidpb"
 	"github.com/twipi/twipi/twicmd"
@@ -20,7 +21,13 @@ import (
 var errInternal = hrt.NewHTTPError(http.StatusInternalServerError, "internal error")
 
 var hrtOpts = hrt.Opts{
-	Encoder:     hrtproto.ProtoJSONEncoder,
+	Encoder: hrt.CombinedEncoder{
+		Encoder: hrtproto.ProtoJSONEncoder,
+		Decoder: hrt.MethodDecoder{
+			"GET": srvutil.ProtoJSONURLDecoder("params"),
+			"*":   hrtproto.ProtoJSONEncoder,
+		},
+	},
 	ErrorWriter: hrt.TextErrorWriter,
 }
 
@@ -68,7 +75,7 @@ type handler struct {
 	logger *slog.Logger
 }
 
-func (h *handler) listServices(ctx context.Context, req *twidpb.ListServicesRequest) (*twidpb.ListServicesResponse, error) {
+func (h *handler) listServices(ctx context.Context, _ hrt.None) (*twidpb.ListServicesResponse, error) {
 	var services []*twidpb.ServiceListItem
 	var err error
 
@@ -96,10 +103,15 @@ func (h *handler) listServices(ctx context.Context, req *twidpb.ListServicesRequ
 	}, nil
 }
 
-func (h *handler) getService(ctx context.Context, req *twidpb.GetServiceRequest) (*twidpb.GetServiceResponse, error) {
-	service, err := h.cmd.Services.Lookup(ctx, req.Service)
+func (h *handler) getService(ctx context.Context, _ hrt.None) (*twidpb.GetServiceResponse, error) {
+	serviceName := chi.URLParamFromCtx(ctx, "name")
+
+	service, err := h.cmd.Services.Lookup(ctx, serviceName)
 	if err != nil {
 		return nil, err
+	}
+	if service == nil {
+		return nil, hrt.NewHTTPError(http.StatusNotFound, "service not found")
 	}
 
 	return &twidpb.GetServiceResponse{
@@ -107,10 +119,11 @@ func (h *handler) getService(ctx context.Context, req *twidpb.GetServiceRequest)
 	}, nil
 }
 
-func (h *handler) getControlPanel(ctx context.Context, req *twidpb.GetControlPanelRequest) (*twidpb.GetControlPanelResponse, error) {
+func (h *handler) getControlPanel(ctx context.Context, _ hrt.None) (*twidpb.GetControlPanelResponse, error) {
+	serviceName := chi.URLParamFromCtx(ctx, "name")
 	session, _ := ctxt.From[authSession](ctx)
 
-	service, err := h.cmd.Services.Lookup(ctx, req.Service)
+	service, err := h.cmd.Services.Lookup(ctx, serviceName)
 	if err != nil {
 		return nil, err
 	}
