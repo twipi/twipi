@@ -52,10 +52,10 @@ message StringType {
 
 // A string list option type.
 message StringListType {
-  // The regex to use for structuring string values into a prettier table.
+  // The separator to use for structuring string values into a prettier table.
   // Each column in the table is named by the field in the structuring_fields
-  // list. Each submatch in the regex is a column in the table.
-  optional string structuring_regex = 1;
+  // list. Each separated value corresponds to a column in the table.
+  optional string structuring_separator = 1;
   repeated string structuring_columns = 2;
 }
 
