@@ -80,11 +80,10 @@ const verificationMessage_ = `
 	If you didn't request this code, please ignore this message.
 `
 
-var verificationMessage = strings.NewReplacer(
-	"\n", " ",
-	"\t", " ",
-	"\r", " ",
-).Replace(verificationMessage_)
+var verificationMessage = strings.TrimSpace(strings.NewReplacer(
+	"\t", "",
+	"\r", "",
+).Replace(verificationMessage_))
 
 func (h *authHandler) loginPhase1(ctx context.Context, req *twidpb.LoginPhase1Request) (hrt.None, error) {
 	code, err := generateLoginCode(h.codes, authSession{
