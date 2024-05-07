@@ -76,6 +76,8 @@ github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcU
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/twipi/cfgutil v0.0.0-20240229095544-ee831a14842a h1:Zzu2lVFnm4chGcemQlS1avMYvL1DSumgeXH1gVqt5PY=
 github.com/twipi/cfgutil v0.0.0-20240229095544-ee831a14842a/go.mod h1:YN1YMFJsLfeVXpxEp9eVN7EO3Y17stI8eKZHmUdFx2w=
+github.com/twipi/cfgutil v0.0.0-20240507030022-1c27be464a19 h1:YRb6jaUGh7IqoRt5ubsmdWU1whldwhvqURTYzcMnHR8=
+github.com/twipi/cfgutil v0.0.0-20240507030022-1c27be464a19/go.mod h1:YN1YMFJsLfeVXpxEp9eVN7EO3Y17stI8eKZHmUdFx2w=
 github.com/twipi/pubsub v0.0.0-20240419070506-7024f4e9981d h1:HaqshQiTTLvZMHhudCRa2Ii0AHV1iNrNt9THY1Kxd3A=
 github.com/twipi/pubsub v0.0.0-20240419070506-7024f4e9981d/go.mod h1:4m2fBPP4FdMX4WVEAtf73w39hSWljGrcVbrVanHYzMQ=
 golang.org/x/mod v0.14.0 h1:dGoOF9QVLYng8IHTm7BAyWqCqSheQ5pYWGhzW00YJr0=

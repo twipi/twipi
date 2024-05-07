@@ -12,7 +12,7 @@ require (
 	github.com/prometheus/client_golang v1.19.0
 	github.com/puzpuzpuz/xsync/v3 v3.1.0
 	github.com/spf13/pflag v1.0.5
-	github.com/twipi/cfgutil v0.0.0-20240229095544-ee831a14842a
+	github.com/twipi/cfgutil v0.0.0-20240507030022-1c27be464a19
 	github.com/twipi/pubsub v0.0.0-20240419070506-7024f4e9981d
 	golang.org/x/sync v0.6.0
 	google.golang.org/protobuf v1.33.0
