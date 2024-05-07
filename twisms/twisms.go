@@ -50,25 +50,30 @@ type MessageSender interface {
 	SendingNumber() (string, float64)
 }
 
+// NewTextBody creates a new message body with the given text.
+func NewTextBody(text string) *twismsproto.MessageBody {
+	return &twismsproto.MessageBody{
+		Text: &twismsproto.TextBody{
+			Text: text,
+		},
+	}
+}
+
 // SendTextMessage sends an SMS message with the given text from the given
 // sender to the given recipient.
-func SendTextMessage(ctx context.Context, s MessageSender, from, to, text string) error {
+func SendTextMessage(ctx context.Context, s MessageSender, from, to string, body *twismsproto.MessageBody) error {
 	return s.SendMessage(ctx, &twismsproto.Message{
 		From: from,
 		To:   to,
-		Body: &twismsproto.MessageBody{
-			Text: &twismsproto.TextBody{
-				Text: text,
-			},
-		},
+		Body: body,
 	})
 }
 
 // SendAutoTextMessage sends an SMS message with the given text from the
 // service's sending number to the given recipient.
-func SendAutoTextMessage(ctx context.Context, s MessageSender, to, text string) error {
+func SendAutoTextMessage(ctx context.Context, s MessageSender, to string, body *twismsproto.MessageBody) error {
 	from, _ := s.SendingNumber()
-	return SendTextMessage(ctx, s, from, to, text)
+	return SendTextMessage(ctx, s, from, to, body)
 }
 
 // MessageReplier describes a service that can reply to messages.
