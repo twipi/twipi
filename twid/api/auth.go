@@ -102,9 +102,8 @@ func (h *authHandler) loginPhase1(ctx context.Context, req *twidpb.LoginPhase1Re
 		"code", code,
 		"phone_number", req.PhoneNumber)
 
-	message := fmt.Sprintf(verificationMessage, code)
-
-	if err := twisms.SendAutoTextMessage(ctx, h.sms, req.PhoneNumber, message); err != nil {
+	body := twisms.NewTextBody(fmt.Sprintf(verificationMessage, code))
+	if err := twisms.SendAutoTextMessage(ctx, h.sms, req.PhoneNumber, body); err != nil {
 		h.codes.Delete(code)
 		h.logger.Error(
 			"failed to send verification code",
