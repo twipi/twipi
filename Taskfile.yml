@@ -1,31 +1,24 @@
 version: '3'
 
-env:
-  GO_MODULE: github.com/twipi/twipi
-  STATE_DIRECTORY: /tmp/twipi
-
-  PORT: 8080
-  DISCORD_PORT: 8090
-
-  PHONE_NUMBER: +19876543210
-  WSBRIDGE_URL: ws://localhost:8080/sms/ws
-
 includes:
   proto:
     taskfile: proto/Taskfile.yml
     dir: proto
+    env:
+      GO_MODULE: github.com/twipi/twipi
 
 tasks:
   dev:
     deps: [generate]
+    requires:
+      vars: [TWID_CONFIG]
     cmds:
-      - go run ./cmd/twid -vvv -c ./twid.json
+      - go run ./cmd/twid -vvv -c "${TWID_CONFIG}"
 
   generate:
     deps:
       - proto:compile
       - sqlc
-      - build-config
 
   sqlc:
     sources:
@@ -33,22 +26,3 @@ tasks:
       - "**/*.sql"
     cmds:
       - sqlc generate
-
-  build-config:
-    sources:
-      - twid.cfg.nix
-    generates:
-      - twid.json
-    cmds:
-      - |
-        nix-instantiate \
-          --eval --strict --json \
-          --argstr port "$PORT" \
-          --argstr discordPort "$DISCORD_PORT" \
-          --argstr phoneNumber "$PHONE_NUMBER" \
-          --argstr stateDirectory "$STATE_DIRECTORY" \
-          ./twid.cfg.nix > twid.json
-
-  wsbridge-client:
-    cmds:
-      - go run ./cmd/wsbridge-client -u "$WSBRIDGE_URL" "$PHONE_NUMBER"
