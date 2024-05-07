@@ -4,7 +4,7 @@ includes:
   proto:
     taskfile: proto/Taskfile.yml
     dir: proto
-    env:
+    vars:
       GO_MODULE: github.com/twipi/twipi
 
 tasks:
