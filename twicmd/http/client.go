@@ -87,7 +87,9 @@ func NewClient(serviceName, baseURL string, logger *slog.Logger) *Client {
 				Error:   hrtclient.TextErrorDecoder,
 			},
 		}),
-		logger:  logger,
+		logger: logger.With(
+			"service", serviceName,
+			"base_url", baseURL),
 		msgs:    make(chan *twismsproto.Message),
 		baseURL: baseURL,
 		name:    serviceName,
@@ -97,6 +99,10 @@ func NewClient(serviceName, baseURL string, logger *slog.Logger) *Client {
 // Start implements [twid.Starter].
 func (s *Client) Start(ctx context.Context) error {
 	errg, ctx := errgroup.WithContext(ctx)
+
+	errg.Go(func() error {
+		return s.subs.Listen(ctx, s.msgs)
+	})
 
 	errg.Go(func() error {
 		const retryDelay = 2 * time.Second
@@ -157,6 +163,10 @@ func (s *Client) runMessagesSSE(ctx context.Context) error {
 
 	var event string
 
+	s.logger.Debug(
+		"connected to SSE stream for messages",
+		"url", req.URL.String())
+
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		b := scanner.Bytes()
@@ -174,8 +184,12 @@ func (s *Client) runMessagesSSE(ctx context.Context) error {
 			switch event {
 			case "message":
 				jsonData := bytes.TrimPrefix(b, []byte("data: "))
-				message := new(twismsproto.Message)
+				s.logger.Debug(
+					"received message over SSE",
+					"json_data", string(jsonData),
+					"event", "message")
 
+				message := new(twismsproto.Message)
 				if err := protojson.Unmarshal(jsonData, message); err != nil {
 					s.logger.Error(
 						"failed to unmarshal message, dropping it",
@@ -202,6 +216,9 @@ func (s *Client) runMessagesSSE(ctx context.Context) error {
 			}
 
 		default:
+			s.logger.Warn(
+				"unexpected line in SSE stream",
+				"line", string(b))
 			return fmt.Errorf("unexpected line in SSE stream: %q", b)
 		}
 	}

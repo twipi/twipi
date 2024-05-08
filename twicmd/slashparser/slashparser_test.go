@@ -144,8 +144,14 @@ func (t *testService) Service(ctx context.Context) (*twicmdproto.Service, error)
 	return t.service, nil
 }
 
-func (t *testService) Execute(context.Context, *twicmdproto.Command) (*twismsproto.MessageBody, error) {
+func (t *testService) Execute(context.Context, *twicmdproto.ExecuteRequest) (*twicmdproto.ExecuteResponse, error) {
 	panic("not implemented")
+}
+
+func (t *testService) SubscribeMessages(chan<- *twismsproto.Message, *twismsproto.MessageFilters) {
+}
+
+func (t *testService) UnsubscribeMessages(chan<- *twismsproto.Message) {
 }
 
 func mustLookupWithServices(serviceFiles ...string) *twicmd.ServiceLookup {

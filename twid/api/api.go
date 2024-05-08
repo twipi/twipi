@@ -79,7 +79,7 @@ func (h *handler) listServices(ctx context.Context, req *twidpb.ListServicesRequ
 	var services []*twidpb.ServiceListItem
 	var err error
 
-	iter := h.cmd.Services.AllServices(ctx)
+	iter := h.cmd.Services.ResolveAllServices(ctx)
 	iter(func(service *twicmd.ResolvedService, e error) bool {
 		if e != nil {
 			err = e

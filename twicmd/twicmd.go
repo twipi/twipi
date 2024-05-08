@@ -119,6 +119,11 @@ func (d *dispatchContext) dispatch(ctx context.Context) {
 		return
 	}
 
+	d.logger.Debug(
+		"dispatching command",
+		"service", service.Name(),
+		"command", command.Command)
+
 	resp, err := service.Execute(ctx, &twicmdproto.ExecuteRequest{
 		Command: command,
 		Message: d.msg,

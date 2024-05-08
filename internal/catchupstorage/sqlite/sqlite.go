@@ -24,7 +24,7 @@ import (
 var schema string
 
 const pragma = `
-	PRAGMA journal_mode=WAL;
+	PRAGMA journal_mode=WAL2;
 	PRAGMA foreign_keys=ON;
 	PRAGMA strict=ON;
 `

@@ -1,10 +1,12 @@
 package twid
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 
+	"github.com/twipi/twipi/proto/out/twismsproto"
 	"github.com/twipi/twipi/twicmd"
 	"github.com/twipi/twipi/twid/config"
 	"github.com/twipi/twipi/twisms"
@@ -87,6 +89,25 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 
 		services.Register(service)
 		lifecycle.add(service, logger)
+
+		// TODO: make module.New accept sms so we don't have to handle this
+		// ourselves.
+
+		lifecycle.starters = append(lifecycle.starters,
+			starterFunc(func(ctx context.Context) error {
+				ch := make(chan *twismsproto.Message)
+				service.SubscribeMessages(ch, nil)
+				defer service.UnsubscribeMessages(ch)
+				for {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case msg := <-ch:
+						sms.SendMessage(ctx, msg)
+					}
+				}
+			}),
+		)
 	}
 
 	manager := &twicmd.Manager{
@@ -99,4 +120,10 @@ func initializeTwicmd(cfg config.Root, lifecycle *lifecycle, sms twisms.MessageS
 
 	lifecycle.add(manager, manager.Logger)
 	return manager, nil
+}
+
+type starterFunc func(ctx context.Context) error
+
+func (f starterFunc) Start(ctx context.Context) error {
+	return f(ctx)
 }

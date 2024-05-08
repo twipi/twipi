@@ -154,9 +154,19 @@ func (l *ServiceLookup) LookupCommand(ctx context.Context, serviceName, commandN
 	return nil, fmt.Errorf("unknown command %q for service %q", commandName, serviceName)
 }
 
-// AllServices resolves and returns all registered services.
+// AllServices returns all registered services.
+func (l *ServiceLookup) AllServices() []Service {
+	var services []Service
+	l.services.Range(func(_ string, service Service) bool {
+		services = append(services, service)
+		return true
+	})
+	return services
+}
+
+// ResolveAllServices resolves and returns all registered services.
 // The iterator will be valid for as long as the context is valid.
-func (l *ServiceLookup) AllServices(ctx context.Context) xiter.Seq2[*ResolvedService, error] {
+func (l *ServiceLookup) ResolveAllServices(ctx context.Context) xiter.Seq2[*ResolvedService, error] {
 	// TODO: parallelize me!
 	return func(yield func(*ResolvedService, error) bool) bool {
 		ok := true

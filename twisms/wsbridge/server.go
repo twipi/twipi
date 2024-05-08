@@ -102,8 +102,7 @@ func (s *ServerService) Start(ctx context.Context) error {
 	errg, ctx := errgroup.WithContext(ctx)
 
 	errg.Go(func() error {
-		s.subs.Listen(ctx, s.msgs)
-		return ctx.Err()
+		return s.subs.Listen(ctx, s.msgs)
 	})
 
 	errg.Go(func() error {
@@ -205,15 +204,17 @@ eventLoop:
 		select {
 		case <-ctx.Done():
 			break eventLoop
-		case msg := <-s.msgs:
+		case msg := <-messages:
 			s.SendMessage(ctx, msg)
 		}
 	}
 
 	s.logger.Info("stopped processing messages")
 
-	if err := s.queue.Close(); err != nil {
-		return fmt.Errorf("could not close message queue: %w", err)
+	if s.queue != nil {
+		if err := s.queue.Close(); err != nil {
+			return fmt.Errorf("could not close message queue: %w", err)
+		}
 	}
 
 	return ctx.Err()
@@ -253,7 +254,7 @@ func (s *serverService) wsHandler(w http.ResponseWriter, r *http.Request) {
 			// Bind the phone numbers to our logs.
 			logger = logger.With("client_phone_numbers", metadata.phoneNumbers)
 
-			if body.Introduction.Since != nil {
+			if s.queue != nil && body.Introduction.Since != nil {
 				logger.Debug(
 					"catching client up to messages",
 					"since", body.Introduction.Since.AsTime(),
